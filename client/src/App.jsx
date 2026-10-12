@@ -19,9 +19,35 @@ import {
   RotateCcw,
   AlertCircle,
   HelpCircle,
-  Video
+  Video,
+  GraduationCap,
+  BookOpen,
+  Library,
+  Target,
+  Wrench,
+  Layers,
+  AlertTriangle,
+  Zap,
+  Briefcase,
+  TrendingUp,
+  Quote,
+  Rocket,
+  CheckSquare,
+  ListChecks,
+  Network,
+  LayoutDashboard,
+  Tv,
+  ChevronDown,
+  SlidersHorizontal
 } from 'lucide-react';
 import CustomDropdown from './components/CustomDropdown';
+import MindMapView from './components/MindMapView';
+import FlashcardsView from './components/FlashcardsView';
+import TimelineStepperView from './components/TimelineStepperView';
+import CheatSheetView from './components/CheatSheetView';
+import SlideDeckView from './components/SlideDeckView';
+import CornellNotesView from './components/CornellNotesView';
+import FaqAccordionView from './components/FaqAccordionView';
 import confetti from 'canvas-confetti';
 import './App.scss';
 
@@ -33,10 +59,14 @@ const DIFFICULTY_OPTIONS = [
 ];
 
 const FORMAT_OPTIONS = [
-  { value: 'structured', label: 'Structured Breakdown', badge: 'Standard', sublabel: 'Complete 360° notes, quotes & action steps' },
-  { value: 'study_guide', label: 'Academic Study Guide', badge: 'Exam Prep', sublabel: 'Key definitions, core theories & review quiz' },
-  { value: 'bullet_cheat_sheet', label: 'Rapid Cheat Sheet', badge: 'Concise', sublabel: 'Quick-reference bullets & rules of thumb' },
-  { value: 'action_plan', label: 'Actionable Implementation', badge: 'Blueprint', sublabel: 'Step-by-step checklist of what to do next' }
+  { value: 'structured', label: 'Comprehensive Notes', badge: 'Full Notes', sublabel: 'Complete 360° notes, quotes & action steps' },
+  { value: 'mindmap', label: 'Visual Mind Map', badge: 'Interactive', sublabel: 'Central thesis with radiating thematic branches' },
+  { value: 'study_guide', label: 'Study Guide & Flashcards', badge: 'Academic', sublabel: 'Key definitions, 3D flip cards & practice quiz' },
+  { value: 'action_plan', label: 'Step-by-Step SOP Plan', badge: 'Workflow', sublabel: 'Execution phases, required tools & checklist' },
+  { value: 'bullet_cheat_sheet', label: 'Rapid Cheat Sheet', badge: 'Quick Recap', sublabel: '60s pitch, key facts & do’s and don’ts' },
+  { value: 'slides', label: 'Interactive Slide Deck', badge: '16:9 Slides', sublabel: 'Presentation slides with speaker notes & fullscreen' },
+  { value: 'cornell', label: 'Cornell Notes System', badge: 'Cornell', sublabel: 'Recall cues column, detailed lecture notes & summary' },
+  { value: 'faq', label: 'Interactive Q&A & FAQ', badge: 'Smart FAQ', sublabel: 'Searchable questions, answers & core takeaways' }
 ];
 
 const FOCUS_OPTIONS = [
@@ -68,6 +98,20 @@ const SAMPLE_VIDEOS = [
   { title: "Kurzgesagt: The Last Human on Earth", url: "https://www.youtube.com/watch?v=5U14q8VCnLg" }
 ];
 
+const PRIMARY_PRESENTATION_MODES = [
+  { id: 'notes', label: 'Notes', fullLabel: 'Comprehensive Notes', icon: FileText, badge: 'Full Notes' },
+  { id: 'mindmap', label: 'Mind Map', fullLabel: 'Visual Mind Map', icon: Network, badge: 'Interactive Map' },
+  { id: 'flashcards', label: 'Flashcards & Quiz', fullLabel: 'Study Flashcards & Quiz', icon: GraduationCap, badge: 'Flip Cards' },
+  { id: 'timeline', label: 'SOP Stepper', fullLabel: 'SOP Timeline Stepper', icon: Layers, badge: 'Execution' },
+  { id: 'cheatsheet', label: 'Cheat Sheet', fullLabel: 'Rapid Cheat Sheet', icon: Zap, badge: 'High Density' },
+  { id: 'slides', label: 'Slide Deck', fullLabel: 'Interactive Slide Deck', icon: Tv, badge: '16:9 Slides' }
+];
+
+const EXTRA_PRESENTATION_MODES = [
+  { id: 'cornell', label: 'Cornell Notes System', icon: BookOpen, badge: 'Cornell System', description: 'Recall cues column, detailed lecture notes & summary' },
+  { id: 'faq', label: 'Interactive Q&A & FAQ', icon: HelpCircle, badge: 'Smart Q&A', description: 'Question-answer accordions with search filter & takeaways' }
+];
+
 export default function App() {
   const [theme, setTheme] = useState('dark');
   const [url, setUrl] = useState('');
@@ -75,11 +119,25 @@ export default function App() {
   const [formatStyle, setFormatStyle] = useState('structured');
   const [focusArea, setFocusArea] = useState('all');
   const [language, setLanguage] = useState('en');
+  const [activeView, setActiveView] = useState('notes');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreDropdownRef = useRef(null);
+
+  // Close extra formats dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (moreDropdownRef.current && !moreDropdownRef.current.contains(e.target)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -139,6 +197,26 @@ export default function App() {
       }
 
       setData(json);
+
+      // Automatically select the native view matching user format
+      if (json.format_style === 'study_guide') {
+        setActiveView('flashcards');
+      } else if (json.format_style === 'action_plan') {
+        setActiveView('timeline');
+      } else if (json.format_style === 'bullet_cheat_sheet') {
+        setActiveView('cheatsheet');
+      } else if (json.format_style === 'mindmap') {
+        setActiveView('mindmap');
+      } else if (json.format_style === 'slides') {
+        setActiveView('slides');
+      } else if (json.format_style === 'cornell') {
+        setActiveView('cornell');
+      } else if (json.format_style === 'faq') {
+        setActiveView('faq');
+      } else {
+        setActiveView('notes');
+      }
+
       try {
         confetti({
           particleCount: 50,
@@ -155,22 +233,38 @@ export default function App() {
 
   const handleCopy = () => {
     if (!data?.summary) return;
+    const s = data.summary;
+    const formatName = s.format_badge || data.format_style?.replace('_', ' ') || 'Summary';
     const notesText = `
-${data.summary.title}
-YouTube Video: ${data.metadata?.title} (${data.metadata?.author})
-Source URL: ${url}
+# ${s.title || data.metadata?.title}
+**Video:** ${data.metadata?.title} (${data.metadata?.author})
+**Format:** ${formatName} | **Complexity:** ${data.difficulty}
+**Source URL:** ${url}
 
-TL;DR:
-${data.summary.tldr}
+---
 
-KEY TAKEAWAYS:
-${data.summary.key_takeaways?.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+## 📌 ${s.overview_title || 'Executive Summary'}
+${s.overview_content || s.tldr}
 
-DETAILED NOTES:
-${data.summary.detailed_notes?.map(n => `### ${n.section_title}\n${n.content}\n`).join('\n')}
+---
 
-ACTION ITEMS:
-${data.summary.action_items?.map(a => `• ${a}`).join('\n')}
+## 🎯 ${s.highlights_title || 'Core Takeaways'}
+${s.highlights_items?.map((item, i) => `### ${i + 1}. ${item.label}\n${item.detail}`).join('\n\n') || s.key_takeaways?.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+---
+
+## 📖 ${s.sections_title || 'Detailed Topic Breakdown'}
+${(s.sections || s.detailed_notes)?.map(sec => `### ${sec.section_title}\n${sec.content}`).join('\n\n')}
+
+---
+
+## 📋 ${s.aux_left_title || 'Action Items & Next Steps'}
+${(s.aux_left_items || s.action_items)?.map(it => `- [ ] ${it}`).join('\n')}
+
+---
+
+## 💡 ${s.aux_right_title || 'Highlights & Directives'}
+${(s.aux_right_items || s.quotes_or_highlights)?.map(it => `> "${it}"`).join('\n\n')}
     `.trim();
 
     navigator.clipboard.writeText(notesText);
@@ -189,6 +283,42 @@ ${data.summary.action_items?.map(a => `• ${a}`).join('\n')}
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const getOverviewIcon = (style, diff) => {
+    if (style === 'study_guide') return <GraduationCap size={16} />;
+    if (style === 'action_plan') return <Target size={16} />;
+    if (style === 'bullet_cheat_sheet') return <Zap size={16} />;
+    if (style === 'executive' || diff === 'Executive') return <Briefcase size={16} />;
+    return <Sparkles size={16} />;
+  };
+
+  const getHighlightsIcon = (style, diff) => {
+    if (style === 'study_guide') return <BookOpen size={20} color="#818cf8" />;
+    if (style === 'action_plan') return <Wrench size={20} color="#10b981" />;
+    if (style === 'bullet_cheat_sheet') return <ListChecks size={20} color="#f59e0b" />;
+    if (style === 'executive' || diff === 'Executive') return <TrendingUp size={20} color="#ef4444" />;
+    return <CheckCircle2 size={20} color="var(--yt-red)" />;
+  };
+
+  const getSectionsIcon = (style) => {
+    if (style === 'study_guide') return <Library size={20} color="#818cf8" />;
+    if (style === 'action_plan') return <Layers size={20} color="#10b981" />;
+    if (style === 'bullet_cheat_sheet') return <FileText size={20} color="#f59e0b" />;
+    return <FileText size={20} color="var(--accent-cyan)" />;
+  };
+
+  const getAuxLeftIcon = (type) => {
+    if (type === 'questions') return <HelpCircle size={18} color="#818cf8" />;
+    if (type === 'warnings') return <AlertTriangle size={18} color="#f59e0b" />;
+    return <CheckCircle2 size={18} color="#10b981" />;
+  };
+
+  const getAuxRightIcon = (type) => {
+    if (type === 'quotes') return <Quote size={18} color="#c084fc" />;
+    if (type === 'dos') return <Check size={18} color="#10b981" />;
+    if (type === 'directives') return <Rocket size={18} color="#f43f5e" />;
+    return <CheckSquare size={18} color="#818cf8" />;
   };
 
   return (
@@ -389,83 +519,238 @@ ${data.summary.action_items?.map(a => `• ${a}`).join('\n')}
               </div>
             </div>
 
-            {/* TL;DR BOX */}
-            {data.summary?.tldr && (
-              <div className="tldr-card glass-panel">
-                <div className="card-label">
-                  <Sparkles size={14} /> Executive TL;DR
-                </div>
-                <p className="tldr-text">{data.summary.tldr}</p>
-              </div>
-            )}
+            {/* PRESENTATION VIEW MODE SWITCHER */}
+            {(() => {
+              const allModes = [...PRIMARY_PRESENTATION_MODES, ...EXTRA_PRESENTATION_MODES];
+              const currentModeObj = allModes.find(m => m.id === activeView) || PRIMARY_PRESENTATION_MODES[0];
+              const isDropdownActive = EXTRA_PRESENTATION_MODES.some(m => m.id === activeView);
+              const CurrentModeIcon = currentModeObj.icon;
 
-            {/* KEY TAKEAWAYS */}
-            {data.summary?.key_takeaways?.length > 0 && (
-              <div className="takeaways-card glass-panel">
-                <h3 className="section-heading">
-                  <CheckCircle2 size={20} color="var(--yt-red)" /> Core Takeaways
-                </h3>
-                <div className="takeaways-grid">
-                  {data.summary.key_takeaways.map((point, i) => (
-                    <div key={i} className="takeaway-item">
-                      <span className="bullet-number">{i + 1}</span>
-                      <span>{point}</span>
+              return (
+                <div className="view-mode-selector-card glass-panel no-print">
+                  <div className="view-selector-header">
+                    <div className="header-left">
+                      <LayoutDashboard size={16} className="header-icon" />
+                      <h3 className="header-title">Presentation Mode:</h3>
+                      <span className="active-mode-badge">
+                        <CurrentModeIcon size={13} />
+                        <span>{currentModeObj.label}</span>
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* DETAILED SECTION NOTES */}
-            {data.summary?.detailed_notes?.length > 0 && (
-              <div className="sections-card glass-panel">
-                <h3 className="section-heading">
-                  <FileText size={20} color="var(--accent-cyan)" /> Comprehensive Topic Breakdown
-                </h3>
-                <div className="topic-accordion">
-                  {data.summary.detailed_notes.map((sec, i) => (
-                    <div key={i} className="topic-card">
-                      <h4 className="topic-title">{sec.section_title}</h4>
-                      <p className="topic-body">{sec.content}</p>
+                    <div className="header-right">
+                      <span className="header-hint">8 Interactive Formats Available</span>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="view-mode-toolbar">
+                    <div className="view-mode-pills">
+                      {PRIMARY_PRESENTATION_MODES.map((mode) => {
+                        const ModeIcon = mode.icon;
+                        const isActive = activeView === mode.id;
+                        return (
+                          <button
+                            key={mode.id}
+                            type="button"
+                            className={`view-pill-btn ${isActive ? 'active' : ''}`}
+                            onClick={() => setActiveView(mode.id)}
+                          >
+                            <ModeIcon size={14} />
+                            <span>{mode.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* DROPDOWN FOR OTHER EXTRAS (Direct sibling of pills container to prevent overflow clipping) */}
+                    <div className="more-formats-dropdown-wrap" ref={moreDropdownRef}>
+                      <button
+                        type="button"
+                        className={`more-formats-trigger ${isDropdownActive ? 'active' : ''} ${moreOpen ? 'menu-open' : ''}`}
+                        onClick={() => setMoreOpen(!moreOpen)}
+                        aria-haspopup="true"
+                        aria-expanded={moreOpen}
+                      >
+                        {isDropdownActive ? (
+                          <>
+                            <CurrentModeIcon size={14} />
+                            <span>{currentModeObj.label}</span>
+                            <ChevronDown size={14} className={`dropdown-arrow ${moreOpen ? 'open' : ''}`} />
+                          </>
+                        ) : (
+                          <>
+                            <SlidersHorizontal size={14} />
+                            <span>More Formats</span>
+                            <span className="dropdown-count-pill">+{EXTRA_PRESENTATION_MODES.length}</span>
+                            <ChevronDown size={14} className={`dropdown-arrow ${moreOpen ? 'open' : ''}`} />
+                          </>
+                        )}
+                      </button>
+
+                      {moreOpen && (
+                        <div className="more-formats-menu">
+                          <div className="dropdown-menu-title">Additional Presentation Formats</div>
+                          {EXTRA_PRESENTATION_MODES.map((mode) => {
+                            const ExtraIcon = mode.icon;
+                            const isSelected = activeView === mode.id;
+                            return (
+                              <button
+                                key={mode.id}
+                                type="button"
+                                className={`menu-option-btn ${isSelected ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setActiveView(mode.id);
+                                  setMoreOpen(false);
+                                }}
+                              >
+                                <div className="option-icon-box">
+                                  <ExtraIcon size={16} />
+                                </div>
+                                <div className="option-text-group">
+                                  <div className="option-label-row">
+                                    <span className="option-label">{mode.label}</span>
+                                    <span className="option-badge">{mode.badge}</span>
+                                  </div>
+                                  <p className="option-description">{mode.description}</p>
+                                </div>
+                                {isSelected && <Check size={16} className="option-check" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              );
+            })()}
+
+            {/* DYNAMIC PRESENTATION VIEW RENDERING */}
+            {activeView === 'mindmap' ? (
+              <MindMapView mindmap={data.summary?.mindmap} />
+            ) : activeView === 'flashcards' ? (
+              <FlashcardsView summary={data.summary} />
+            ) : activeView === 'timeline' ? (
+              <TimelineStepperView summary={data.summary} />
+            ) : activeView === 'cheatsheet' ? (
+              <CheatSheetView summary={data.summary} />
+            ) : activeView === 'slides' ? (
+              <SlideDeckView summary={data.summary} metadata={data.metadata} />
+            ) : activeView === 'cornell' ? (
+              <CornellNotesView summary={data.summary} metadata={data.metadata} />
+            ) : activeView === 'faq' ? (
+              <FaqAccordionView summary={data.summary} metadata={data.metadata} />
+            ) : (
+              /* DEFAULT STRUCTURED NOTES VIEW */
+              <>
+                {/* OVERVIEW / TL;DR BOX */}
+                {(data.summary?.overview_content || data.summary?.tldr) && (
+                  <div className={`tldr-card glass-panel format-${data.format_style}`}>
+                    <div className="card-label">
+                      {getOverviewIcon(data.format_style, data.difficulty)}
+                      <span>{data.summary.overview_title || "Executive TL;DR"}</span>
+                    </div>
+                    <p className="tldr-text">{data.summary.overview_content || data.summary.tldr}</p>
+                  </div>
+                )}
+
+                {/* KEY HIGHLIGHTS / TAKEAWAYS */}
+                {(data.summary?.highlights_items?.length > 0 || data.summary?.key_takeaways?.length > 0) && (
+                  <div className="takeaways-card glass-panel">
+                    <h3 className="section-heading">
+                      {getHighlightsIcon(data.format_style, data.difficulty)}
+                      <span>{data.summary.highlights_title || "Core Takeaways"}</span>
+                    </h3>
+                    <div className="highlights-grid">
+                      {data.summary.highlights_items ? (
+                        data.summary.highlights_items.map((item, i) => (
+                          <div key={i} className="highlight-card-item">
+                            <div className="highlight-header">
+                              <span className="highlight-pill-badge">{i + 1}</span>
+                              <strong className="highlight-title">{item.label}</strong>
+                            </div>
+                            <p className="highlight-detail">{item.detail}</p>
+                          </div>
+                        ))
+                      ) : (
+                        data.summary.key_takeaways.map((point, i) => (
+                          <div key={i} className="takeaway-item">
+                            <span className="bullet-number">{i + 1}</span>
+                            <span>{point}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* DETAILED SECTION NOTES */}
+                {(data.summary?.sections?.length > 0 || data.summary?.detailed_notes?.length > 0) && (
+                  <div className="sections-card glass-panel">
+                    <h3 className="section-heading">
+                      {getSectionsIcon(data.format_style)}
+                      <span>{data.summary.sections_title || "Comprehensive Topic Breakdown"}</span>
+                    </h3>
+                    <div className="topic-accordion">
+                      {(data.summary.sections || data.summary.detailed_notes).map((sec, i) => (
+                        <div key={i} className="topic-card">
+                          <h4 className="topic-title">{sec.section_title}</h4>
+                          <p className="topic-body">{sec.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AUXILIARY DYNAMIC CARDS */}
+                <div className="bottom-grid">
+                  {(data.summary?.aux_left_items?.length > 0 || data.summary?.action_items?.length > 0) && (
+                    <div className="sub-card glass-panel aux-left-card">
+                      <h4 className="sub-heading">
+                        {getAuxLeftIcon(data.summary.aux_left_type)}
+                        <span>{data.summary.aux_left_title || "Action Items & Next Steps"}</span>
+                      </h4>
+                      <ul className={`items-list type-${data.summary.aux_left_type || 'checklist'}`}>
+                        {(data.summary.aux_left_items || data.summary.action_items).map((item, i) => (
+                          <li key={i}>
+                            {data.summary.aux_left_type === 'questions' ? (
+                              <span className="q-badge">Q{i + 1}</span>
+                            ) : data.summary.aux_left_type === 'warnings' ? (
+                              <AlertTriangle size={15} color="#f59e0b" style={{ flexShrink: 0, marginTop: 3 }} />
+                            ) : (
+                              <CheckCircle2 size={16} color="var(--accent-emerald)" style={{ flexShrink: 0, marginTop: 2 }} />
+                            )}
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {(data.summary?.aux_right_items?.length > 0 || data.summary?.quotes_or_highlights?.length > 0) && (
+                    <div className="sub-card glass-panel aux-right-card">
+                      <h4 className="sub-heading">
+                        {getAuxRightIcon(data.summary.aux_right_type)}
+                        <span>{data.summary.aux_right_title || "Memorable Highlights"}</span>
+                      </h4>
+                      <ul className={`items-list type-${data.summary.aux_right_type || 'quotes'}`}>
+                        {(data.summary.aux_right_items || data.summary.quotes_or_highlights).map((item, i) => (
+                          <li key={i} className={data.summary.aux_right_type === 'quotes' ? 'quote-item' : ''}>
+                            {data.summary.aux_right_type === 'dos' ? (
+                              <Check size={16} color="var(--accent-emerald)" style={{ flexShrink: 0, marginTop: 2 }} />
+                            ) : data.summary.aux_right_type === 'directives' ? (
+                              <Rocket size={15} color="#f43f5e" style={{ flexShrink: 0, marginTop: 3 }} />
+                            ) : data.summary.aux_right_type === 'quotes' ? null : (
+                              <CheckSquare size={16} color="#818cf8" style={{ flexShrink: 0, marginTop: 2 }} />
+                            )}
+                            <span>{data.summary.aux_right_type === 'quotes' ? `“${item}”` : item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-
-            {/* ACTION ITEMS & MEMORABLE QUOTES */}
-            <div className="bottom-grid">
-              {data.summary?.action_items?.length > 0 && (
-                <div className="sub-card glass-panel">
-                  <h4 className="sub-heading">
-                    <Bookmark size={18} color="var(--accent-amber)" /> Action Items & Next Steps
-                  </h4>
-                  <ul>
-                    {data.summary.action_items.map((item, i) => (
-                      <li key={i}>
-                        <CheckCircle2 size={16} color="var(--accent-emerald)" style={{ flexShrink: 0, marginTop: 2 }} />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {data.summary?.quotes_or_highlights?.length > 0 && (
-                <div className="sub-card glass-panel">
-                  <h4 className="sub-heading">
-                    <Sparkles size={18} color="var(--accent-purple)" /> Memorable Quotes & Highlights
-                  </h4>
-                  <ul>
-                    {data.summary.quotes_or_highlights.map((quote, i) => (
-                      <li key={i} style={{ fontStyle: 'italic' }}>
-                        <span>“{quote}”</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
           </div>
         </>
       )}

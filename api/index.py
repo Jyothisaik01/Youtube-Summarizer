@@ -153,7 +153,7 @@ def query_gemini_json(prompt: str) -> Optional[dict]:
     if not api_key:
         return None
     
-    models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash"]
+    models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash"]
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}]
     }).encode("utf-8")
@@ -182,6 +182,262 @@ class SummarizeRequest(BaseModel):
     language: Optional[str] = "en" # language code
     format_style: Optional[str] = "structured" # structured, study_guide, bullet_cheat_sheet, action_plan
     focus_area: Optional[str] = "all" # all, key_insights, step_by_step, quotes_and_lessons
+
+format_specs = {
+    "study_guide": {
+        "format_badge": "Study Guide",
+        "overview_title": "Core Thesis & Conceptual Foundations",
+        "highlights_title": "Key Terminology & Flashcard Definitions",
+        "highlights_type": "terms",
+        "sections_title": "Curriculum Syllabus & In-Depth Deconstruction",
+        "aux_left_title": "Self-Assessment Review Questions",
+        "aux_left_type": "questions",
+        "aux_right_title": "Exam Revision & Homework Checklist",
+        "aux_right_type": "checklist",
+        "directive": (
+            "DOCUMENT STRUCTURE: ACADEMIC STUDY GUIDE.\n"
+            "1. Overview: The foundational academic thesis of the video.\n"
+            "2. Highlights: 4 to 6 critical terms, theories, or concepts with clear definitions (label='Term/Concept', detail='Rigorous academic definition and significance').\n"
+            "3. Sections: 3 to 4 syllabus chapters analyzing the subject matter step-by-step.\n"
+            "4. Auxiliary Left: 3 challenging self-assessment questions that test student comprehension (e.g. 'Q: How does X work? A: ...').\n"
+            "5. Auxiliary Right: 3 actionable study/practice exercises to master this material."
+        )
+    },
+    "bullet_cheat_sheet": {
+        "format_badge": "Cheat Sheet",
+        "overview_title": "60-Second Elevator Pitch",
+        "highlights_title": "Rapid-Reference Rules & Key Facts",
+        "highlights_type": "rules",
+        "sections_title": "Golden Principles & Paradigm Shifts",
+        "aux_left_title": "Common Pitfalls to Avoid (Don'ts)",
+        "aux_left_type": "warnings",
+        "aux_right_title": "High-Impact Best Practices (Do's)",
+        "aux_right_type": "dos",
+        "directive": (
+            "DOCUMENT STRUCTURE: RAPID-REFERENCE CHEAT SHEET.\n"
+            "1. Overview: Ultra-concise 60-second summary.\n"
+            "2. Highlights: 4 to 6 rapid-fire rules of thumb, formulas, or quick facts (label='Rule/Fact', detail='One-liner application').\n"
+            "3. Sections: 3 to 4 short, punchy breakdowns of core principles without filler.\n"
+            "4. Auxiliary Left: 3 common mistakes or antipatterns to avoid (Don'ts).\n"
+            "5. Auxiliary Right: 3 golden pro-tips and best practices to execute (Do's)."
+        )
+    },
+    "action_plan": {
+        "format_badge": "Action SOP",
+        "overview_title": "Mission Objective & Expected Deliverables",
+        "highlights_title": "Prerequisites, Tools & Setup Stack",
+        "highlights_type": "prerequisites",
+        "sections_title": "Step-by-Step SOP Execution Phases",
+        "aux_left_title": "Known Bottlenecks & Troubleshooting Gotchas",
+        "aux_left_type": "warnings",
+        "aux_right_title": "Definition of Done (DoD) & Validation Checklist",
+        "aux_right_type": "checklist",
+        "directive": (
+            "DOCUMENT STRUCTURE: STANDARD OPERATING PROCEDURE (SOP) & ACTION PLAN.\n"
+            "1. Overview: Exact target deliverable and expected outcome.\n"
+            "2. Highlights: 4 to 6 required tools, environments, prerequisites, or inputs (label='Tool/Input', detail='Requirement & setup details').\n"
+            "3. Sections: 3 to 4 chronological phases of execution (e.g. 'Phase 1: Setup', 'Phase 2: Execution', 'Phase 3: Validation').\n"
+            "4. Auxiliary Left: 3 critical gotchas, edge cases, or debugging troubleshooting tips.\n"
+            "5. Auxiliary Right: 3 clear verification criteria to confirm successful execution."
+        )
+    },
+    "executive": {
+        "format_badge": "Executive Brief",
+        "overview_title": "Bottom Line Up Front (BLUF)",
+        "highlights_title": "Strategic High-Stakes Findings & Metrics",
+        "highlights_type": "metrics",
+        "sections_title": "Operational Dynamics & Strategic Trade-Offs",
+        "aux_left_title": "Risk Assessment & Exposure Analysis",
+        "aux_left_type": "warnings",
+        "aux_right_title": "Board Directives & Milestone Roadmap",
+        "aux_right_type": "directives",
+        "directive": (
+            "DOCUMENT STRUCTURE: C-SUITE EXECUTIVE BRIEFING.\n"
+            "1. Overview: Bottom Line Up Front (BLUF) stating business, technical, or market reality.\n"
+            "2. Highlights: 4 to 6 high-stakes strategic findings with metrics or impact (label='Finding/Metric', detail='Business or operational impact').\n"
+            "3. Sections: 3 to 4 strategic pillars evaluating capital, resources, and competitive moats.\n"
+            "4. Auxiliary Left: 3 key vulnerabilities, tail risks, or trade-offs to monitor.\n"
+            "5. Auxiliary Right: 3 prioritized executive directives for leadership."
+        )
+    },
+    "slides": {
+        "format_badge": "Slide Deck",
+        "overview_title": "Slide 1: Core Presentation Premise",
+        "highlights_title": "Slide 2: Pillars & Essential Findings",
+        "highlights_type": "pillars",
+        "sections_title": "Slide 3-6: Key Thematic Chapters",
+        "aux_left_title": "Slide 7: Execution Action Checklist",
+        "aux_left_type": "checklist",
+        "aux_right_title": "Slide 8: Closing Insights & Quotes",
+        "aux_right_type": "quotes",
+        "directive": (
+            "DOCUMENT STRUCTURE: EXECUTIVE SLIDE DECK (16:9 PRESENTATION).\n"
+            "1. Overview: Slide 1 high-impact introduction and core premise.\n"
+            "2. Highlights: 4 to 6 punchy slide takeaway bullets or metrics (label='Slide Bullet', detail='Presenter talking point').\n"
+            "3. Sections: 3 to 4 sequential slide chapters each detailing a core theme with slide title and bullets.\n"
+            "4. Auxiliary Left: 3 immediate execution milestones or next steps.\n"
+            "5. Auxiliary Right: 2 to 3 memorable soundbites for the closing slide."
+        )
+    },
+    "cornell": {
+        "format_badge": "Cornell Notes",
+        "overview_title": "Foundational Academic Thesis",
+        "highlights_title": "Recall Cues & High-Yield Keywords",
+        "highlights_type": "terms",
+        "sections_title": "Detailed Lecture Notes & Topic Outlines",
+        "aux_left_title": "Active Recall Study Questions",
+        "aux_left_type": "questions",
+        "aux_right_title": "Key Formulas, Directives & Soundbites",
+        "aux_right_type": "checklist",
+        "directive": (
+            "DOCUMENT STRUCTURE: CORNELL NOTE-TAKING SYSTEM.\n"
+            "1. Overview: The overarching subject thesis and lecture context.\n"
+            "2. Highlights: 4 to 6 critical recall cues and high-yield keywords (label='Cue/Keyword', detail='Concept explanation for active recall testing').\n"
+            "3. Sections: 3 to 4 structured lecture note sections with hierarchical points.\n"
+            "4. Auxiliary Left: 3 challenging self-test recall questions.\n"
+            "5. Auxiliary Right: 3 actionable directives or memorable formulas."
+        )
+    },
+    "faq": {
+        "format_badge": "Q&A FAQ",
+        "overview_title": "Primary Thesis & Big Question Answered",
+        "highlights_title": "Foundational Concepts & Doubts Addressed",
+        "highlights_type": "terms",
+        "sections_title": "In-Depth Thematic Questions & Expert Answers",
+        "aux_left_title": "Viewer Questions on Gotchas & Implementation",
+        "aux_left_type": "questions",
+        "aux_right_title": "Core Verdicts & Expert Directives",
+        "aux_right_type": "checklist",
+        "directive": (
+            "DOCUMENT STRUCTURE: INTERACTIVE Q&A & FAQ BREAKDOWN.\n"
+            "1. Overview: The main problem the video addresses and its fundamental solution.\n"
+            "2. Highlights: 4 to 6 key inquiries and concise answers (label='Question/Concept', detail='Definitive explanation').\n"
+            "3. Sections: 3 to 4 deep-dive question breakdowns addressing core themes.\n"
+            "4. Auxiliary Left: 3 common doubts, traps, or troubleshooting questions answered.\n"
+            "5. Auxiliary Right: 3 decisive takeaways and rules of thumb."
+        )
+    },
+    "structured": {
+        "format_badge": "Detailed Notes",
+        "overview_title": "Executive Summary & Core Premise",
+        "highlights_title": "Essential Key Takeaways & Core Insights",
+        "highlights_type": "takeaways",
+        "sections_title": "Chronological Deep-Dive Chapters",
+        "aux_left_title": "Practical Action Items & Next Steps",
+        "aux_left_type": "checklist",
+        "aux_right_title": "Memorable Quotations & Golden Soundbites",
+        "aux_right_type": "quotes",
+        "directive": (
+            "DOCUMENT STRUCTURE: COMPREHENSIVE LECTURE & EPISODE NOTES.\n"
+            "1. Overview: Holistic overview capturing the core premise and background.\n"
+            "2. Highlights: 4 to 6 essential takeaways with detailed explanation (label='Key Takeaway', detail='Full explanation').\n"
+            "3. Sections: 3 to 4 detailed topical breakdowns following the progression of the video.\n"
+            "4. Auxiliary Left: 3 concrete action steps for the viewer.\n"
+            "5. Auxiliary Right: 2 to 3 notable verbatim or paraphrased quotes capturing the speaker's philosophy."
+        )
+    }
+}
+
+def normalize_summary(res: Optional[dict], s: dict, m: dict) -> dict:
+    if not res:
+        res = {}
+    if "title" not in res:
+        res["title"] = f"{s['format_badge']}: {m.get('title', 'Video Summary')}"
+    if "format_badge" not in res:
+        res["format_badge"] = s["format_badge"]
+    if "overview_title" not in res:
+        res["overview_title"] = s["overview_title"]
+    if "overview_content" not in res:
+        res["overview_content"] = res.get("tldr", f"Comprehensive analysis of {m.get('title', 'the video')}.")
+    if "highlights_title" not in res:
+        res["highlights_title"] = s["highlights_title"]
+    if "highlights_type" not in res:
+        res["highlights_type"] = s["highlights_type"]
+
+    if "highlights_items" not in res or not isinstance(res["highlights_items"], list) or len(res["highlights_items"]) == 0:
+        if "key_takeaways" in res and isinstance(res["key_takeaways"], list):
+            res["highlights_items"] = [
+                {"label": f"Takeaway {i+1}", "detail": str(item)} for i, item in enumerate(res["key_takeaways"])
+            ]
+        else:
+            res["highlights_items"] = [
+                {"label": "Key Insight", "detail": "Primary takeaway from the discussion."}
+            ]
+
+    if "sections_title" not in res:
+        res["sections_title"] = s["sections_title"]
+    if "sections" not in res or not isinstance(res["sections"], list) or len(res["sections"]) == 0:
+        res["sections"] = res.get("detailed_notes", [
+            {"section_title": "Core Discussion", "content": "Analysis of key themes and presentation points."}
+        ])
+
+    if "aux_left_title" not in res:
+        res["aux_left_title"] = s["aux_left_title"]
+    if "aux_left_type" not in res:
+        res["aux_left_type"] = s["aux_left_type"]
+    if "aux_left_items" not in res or not isinstance(res["aux_left_items"], list) or len(res["aux_left_items"]) == 0:
+        res["aux_left_items"] = res.get("action_items", [
+            "Review the key arguments presented in the video.",
+            "Apply the primary insights to your current domain."
+        ])
+
+    if "aux_right_title" not in res:
+        res["aux_right_title"] = s["aux_right_title"]
+    if "aux_right_type" not in res:
+        res["aux_right_type"] = s["aux_right_type"]
+    if "aux_right_items" not in res or not isinstance(res["aux_right_items"], list) or len(res["aux_right_items"]) == 0:
+        res["aux_right_items"] = res.get("quotes_or_highlights", [
+            "Consistent application of fundamentals yields outsized outcomes."
+        ])
+
+    # Backward compatibility fields
+    res["tldr"] = res.get("overview_content", "")
+    res["key_takeaways"] = [
+        f"{it['label']}: {it['detail']}" if isinstance(it, dict) and "label" in it else str(it)
+        for it in res.get("highlights_items", [])
+    ]
+    res["detailed_notes"] = res.get("sections", [])
+    res["action_items"] = res.get("aux_left_items", [])
+    res["quotes_or_highlights"] = res.get("aux_right_items", [])
+
+    # Visual Mindmap Tree Structure
+    palette = ["#ff416c", "#818cf8", "#10b981", "#f59e0b", "#06b6d4", "#a855f7"]
+    branches = []
+    
+    # Branch 1: Overview
+    if res.get("overview_content"):
+        clean_sents = [s.strip() for s in re.split(r'[.!?]+', res.get("overview_content", "")) if len(s.strip()) > 12]
+        branches.append({
+            "title": res.get("overview_title", "Core Objective"),
+            "color": palette[0],
+            "children": clean_sents[:3] if clean_sents else [res.get("overview_content", "")[:90]]
+        })
+
+    # Branch 2..N: Deep Sections
+    for idx, sec in enumerate(res.get("sections", [])[:4]):
+        color = palette[(idx + 1) % len(palette)]
+        sec_title = sec.get("section_title", f"Theme {idx+1}")
+        sec_sents = [s.strip() for s in re.split(r'[.!?]+', sec.get("content", "")) if len(s.strip()) > 12]
+        branches.append({
+            "title": sec_title,
+            "color": color,
+            "children": sec_sents[:3] if sec_sents else [sec.get("content", "")[:90]]
+        })
+
+    # Branch: Key Directives / Takeaways
+    if res.get("aux_left_items"):
+        branches.append({
+            "title": res.get("aux_left_title", "Directives & Actions"),
+            "color": palette[len(branches) % len(palette)],
+            "children": [str(x)[:90] for x in res.get("aux_left_items", [])[:3]]
+        })
+
+    res["mindmap"] = {
+        "center": m.get("title", res.get("title", "Video Synthesis")),
+        "branches": branches
+    }
+
+    return res
 
 @app.get("/api/health")
 def health():
@@ -240,12 +496,11 @@ def summarize_video(req: SummarizeRequest):
         )
     }.get(req.difficulty, "Balanced, comprehensive, clear notes.")
 
-    format_directives = {
-        "structured": "FORMATTING: Complete multi-dimensional breakdown across takeaways, chronological topic deep dives, memorable quotes, and practical action items.",
-        "study_guide": "FORMATTING: Academic Study Guide. Group detailed notes with concept definitions, key exam-worthy points, and critical review questions in action items.",
-        "bullet_cheat_sheet": "FORMATTING: Rapid-Reference Cheat Sheet. Heavy focus on quick-reference bullet points, rules of thumb, and syntax/workflow snippets.",
-        "action_plan": "FORMATTING: 100% Practical Implementation Blueprint. Prioritize the step-by-step checklist of what the viewer should execute immediately after watching."
-    }.get(req.format_style, "Comprehensive structured breakdown.")
+    # If user selected Executive difficulty on structured format, upgrade to executive spec
+    active_format = req.format_style or "structured"
+    if req.difficulty == "Executive" and active_format == "structured":
+        active_format = "executive"
+    spec = format_specs.get(active_format, format_specs["structured"])
 
     focus_directives = {
         "all": "FOCUS: Cover the entire spectrum of the video evenly.",
@@ -260,8 +515,8 @@ TARGET VIDEO: "{metadata['title']}" by {metadata['author']}
 COMPLEXITY LEVEL: {req.difficulty.upper()}
 {complexity_directives}
 
-DOCUMENT FORMAT: {req.format_style.upper()}
-{format_directives}
+DOCUMENT FORMAT REQUIREMENT:
+{spec['directive']}
 
 CONTENT EMPHASIS:
 {focus_directives}
@@ -272,89 +527,70 @@ CRITICAL INSTRUCTION: Every single title, sentence, bullet, and explanation MUST
 VIDEO TRANSCRIPT:
 \"\"\"{trimmed_transcript}\"\"\"
 
-Generate an impactful, highly customized summary that STRICTLY REFLECTS the requested {req.difficulty.upper()} complexity and {req.format_style.upper()} formatting.
-Do NOT output a generic summary. The tone, sentence length, and depth MUST radically shift according to the requested level.
+Generate an impactful, highly customized summary that STRICTLY REFLECTS the requested {req.difficulty.upper()} complexity and {spec['format_badge']} document structure.
+Do NOT output a generic summary. The tone, titles, section headings, and depth MUST match the format.
 
 Respond ONLY with a valid, clean JSON object with this exact structure:
 {{
-  "title": "A compelling, distinct title for this summary in {lang_name} reflecting the {req.difficulty} tone",
-  "difficulty_badge": "{req.difficulty}",
-  "tldr": "A 2-3 sentence executive summary capturing the core premise and conclusion in {lang_name}, strictly matching the {req.difficulty} tone.",
-  "key_takeaways": [
-    "Key takeaway point 1 in {lang_name}",
-    "Key takeaway point 2 in {lang_name}",
-    "Key takeaway point 3 in {lang_name}",
-    "Key takeaway point 4 in {lang_name}",
-    "Key takeaway point 5 in {lang_name}",
-    "Key takeaway point 6 in {lang_name}"
-  ],
-  "detailed_notes": [
+  "title": "A compelling, distinct title for this document in {lang_name} reflecting the {req.difficulty} tone",
+  "format_badge": "{spec['format_badge']}",
+  "overview_title": "{spec['overview_title']}",
+  "overview_content": "A 2-3 sentence overview providing {spec['overview_title']} in {lang_name}, strictly matching the {req.difficulty} tone.",
+  "highlights_title": "{spec['highlights_title']}",
+  "highlights_type": "{spec['highlights_type']}",
+  "highlights_items": [
     {{
-      "section_title": "Section or Topic 1 in {lang_name}",
-      "content": "In-depth explanation and specific details in {lang_name} adhering to {req.difficulty} complexity."
+      "label": "Short label/term/metric 1 in {lang_name}",
+      "detail": "High-impact explanation or definition in {lang_name}"
     }},
     {{
-      "section_title": "Section or Topic 2 in {lang_name}",
-      "content": "In-depth explanation in {lang_name}."
+      "label": "Short label/term/metric 2 in {lang_name}",
+      "detail": "High-impact explanation or definition in {lang_name}"
     }},
     {{
-      "section_title": "Section or Topic 3 in {lang_name}",
-      "content": "In-depth explanation in {lang_name}."
+      "label": "Short label/term/metric 3 in {lang_name}",
+      "detail": "High-impact explanation or definition in {lang_name}"
     }},
     {{
-      "section_title": "Section or Topic 4 in {lang_name}",
-      "content": "In-depth explanation in {lang_name}."
+      "label": "Short label/term/metric 4 in {lang_name}",
+      "detail": "High-impact explanation or definition in {lang_name}"
     }}
   ],
-  "quotes_or_highlights": [
-    "Notable quotation or high-impact statement in {lang_name}",
-    "Another memorable highlight in {lang_name}"
+  "sections_title": "{spec['sections_title']}",
+  "sections": [
+    {{
+      "section_title": "Section/Chapter/Phase 1 in {lang_name}",
+      "content": "In-depth content in {lang_name} adhering to {req.difficulty} complexity."
+    }},
+    {{
+      "section_title": "Section/Chapter/Phase 2 in {lang_name}",
+      "content": "In-depth content in {lang_name}."
+    }},
+    {{
+      "section_title": "Section/Chapter/Phase 3 in {lang_name}",
+      "content": "In-depth content in {lang_name}."
+    }}
   ],
-  "action_items": [
-    "Concrete actionable step or exercise 1 in {lang_name}",
-    "Concrete actionable step or exercise 2 in {lang_name}",
-    "Concrete actionable step or exercise 3 in {lang_name}"
+  "aux_left_title": "{spec['aux_left_title']}",
+  "aux_left_type": "{spec['aux_left_type']}",
+  "aux_left_items": [
+    "Item 1 in {lang_name}",
+    "Item 2 in {lang_name}",
+    "Item 3 in {lang_name}"
+  ],
+  "aux_right_title": "{spec['aux_right_title']}",
+  "aux_right_type": "{spec['aux_right_type']}",
+  "aux_right_items": [
+    "Item 1 in {lang_name}",
+    "Item 2 in {lang_name}",
+    "Item 3 in {lang_name}"
   ],
   "audio_script": "A natural 3-sentence spoken summary in {lang_name} capturing the big idea and takeaway, written for audio text-to-speech."
 }}
 Do NOT wrap in markdown formatting code blocks. Return ONLY pure JSON."""
 
     gemini_result = query_gemini_json(prompt)
-
-    if not gemini_result:
-        # Fallback if Gemini quota is unavailable
-        gemini_result = {
-            "title": f"Summary: {metadata['title']}",
-            "tldr": f"This video covers '{metadata['title']}' by {metadata['author']}. It discusses essential principles, practical demonstrations, and real-world implications.",
-            "key_takeaways": [
-                f"Video presents comprehensive overview of {metadata['title']}.",
-                "Clear step-by-step reasoning and context shared throughout the discussion.",
-                "Practical examples illustrate core concepts.",
-                "Actionable conclusions outlined for viewers."
-            ],
-            "detailed_notes": [
-                {
-                    "section_title": "1. Introduction & Background",
-                    "content": "The speaker introduces the core subject matter, framing the problem statement and historical context."
-                },
-                {
-                    "section_title": "2. Main Discussion & Frameworks",
-                    "content": "Exploration of central arguments, supporting evidence, and strategic methodologies."
-                },
-                {
-                    "section_title": "3. Conclusions & Takeaways",
-                    "content": "Final analysis reiterating key learnings and next steps."
-                }
-            ],
-            "quotes_or_highlights": [
-                "Understanding the core fundamentals unlocks effective application."
-            ],
-            "action_items": [
-                "Review the practical takeaways discussed in the session.",
-                "Apply the recommended workflows to your own projects."
-            ],
-            "audio_script": f"Here is the summary of {metadata['title']}. The video covers fundamental concepts and key takeaways for viewers."
-        }
+    gemini_result = normalize_summary(gemini_result, spec, metadata)
 
     # Generate Audio base64 via gTTS in requested language
     audio_base64 = None

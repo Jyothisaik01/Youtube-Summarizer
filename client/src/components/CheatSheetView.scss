@@ -1,0 +1,258 @@
+.cheatsheet-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+
+  .pitch-card {
+    padding: 1.5rem 1.75rem;
+    border-left: 4px solid #f59e0b;
+
+    .pitch-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #f59e0b;
+      margin-bottom: 0.5rem;
+    }
+
+    .pitch-text {
+      font-size: 1.15rem;
+      line-height: 1.6;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+  }
+
+  /* RULES WITH FAST COPY */
+  .rules-section {
+    padding: 1.75rem;
+
+    .rules-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+
+      .rules-title {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-size: 1.2rem;
+        font-weight: 700;
+      }
+
+      .fast-tag {
+        background: rgba(245, 158, 11, 0.12);
+        color: #d97706;
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 0.2rem 0.6rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+      }
+    }
+
+    .rules-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .rule-item-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 0.85rem 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: rgba(245, 158, 11, 0.35);
+        background: var(--bg-card);
+      }
+
+      .rule-badge-col {
+        .rule-num {
+          background: rgba(245, 158, 11, 0.15);
+          color: #d97706;
+          font-size: 0.75rem;
+          font-weight: 800;
+          padding: 0.2rem 0.45rem;
+          border-radius: 6px;
+        }
+      }
+
+      .rule-content-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+
+        .rule-label {
+          font-size: 0.94rem;
+          font-weight: 700;
+          color: var(--text-primary);
+        }
+
+        .rule-detail {
+          font-size: 0.86rem;
+          color: var(--text-secondary);
+          line-height: 1.45;
+        }
+      }
+
+      .copy-point-btn {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-muted);
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+
+        &:hover {
+          color: var(--text-primary);
+          border-color: #d97706;
+          background: rgba(245, 158, 11, 0.1);
+        }
+      }
+    }
+  }
+
+  /* PRINCIPLES GRID */
+  .principles-section {
+    padding: 1.75rem;
+
+    .principles-heading {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .principles-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+
+      @media (max-width: 680px) {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .principle-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      position: relative;
+      overflow: hidden;
+
+      .principle-num-badge {
+        font-size: 0.72rem;
+        font-weight: 900;
+        color: var(--text-muted);
+        opacity: 0.5;
+        letter-spacing: 0.05em;
+      }
+
+      .principle-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .principle-content {
+        font-size: 0.88rem;
+        line-height: 1.6;
+        color: var(--text-secondary);
+      }
+    }
+  }
+
+  /* COMPARISON GRID */
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+
+    @media (max-width: 768px) {
+      grid-template-columns: 1fr;
+    }
+
+    .comparison-card {
+      padding: 1.5rem;
+
+      &.donts-card {
+        border-top: 3px solid #ef4444;
+      }
+
+      &.dos-card {
+        border-top: 3px solid #10b981;
+      }
+
+      .comparison-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+
+        &.dont-header {
+          color: #ef4444;
+        }
+
+        &.do-header {
+          color: #059669;
+        }
+      }
+
+      .comparison-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+
+        li {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.65rem;
+          font-size: 0.9rem;
+          line-height: 1.5;
+          padding: 0.7rem 0.85rem;
+          border-radius: 10px;
+
+          &.dont-item {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: var(--text-primary);
+          }
+
+          &.do-item {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: var(--text-primary);
+          }
+        }
+      }
+    }
+  }
+}
+
