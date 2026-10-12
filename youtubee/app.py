@@ -44,19 +44,51 @@ def extract_video_id(youtube_video_url):
 
 def extract_transcript_details(video_id):
     """Extract the transcript from the YouTube video with robust language fallbacks."""
+    # 1. Try modern instance API (youtube_transcript_api v1.2+)
     try:
-        transcript_text = YouTubeTranscriptApi.get_transcript(video_id)
-        transcript = " ".join([i["text"] for i in transcript_text])
-        return transcript
+        api = YouTubeTranscriptApi()
+        if hasattr(api, 'fetch'):
+            try:
+                fetched = api.fetch(video_id)
+                snippets = [item.text if hasattr(item, 'text') else item.get('text', '') for item in fetched]
+                if snippets:
+                    return " ".join(snippets)
+            except Exception:
+                pass
+
+        if hasattr(api, 'list'):
+            t_list = api.list(video_id)
+            for t in t_list:
+                fetched = t.fetch()
+                snippets = [item.text if hasattr(item, 'text') else item.get('text', '') for item in fetched]
+                if snippets:
+                    return " ".join(snippets)
     except Exception:
+        pass
+
+    # 2. Try legacy classmethod API (youtube_transcript_api < 1.2)
+    if hasattr(YouTubeTranscriptApi, 'get_transcript'):
         try:
-            # Fallback to fetching any available transcript
+            transcript_text = YouTubeTranscriptApi.get_transcript(video_id)
+            snippets = [i.get('text', '') if isinstance(i, dict) else getattr(i, 'text', '') for i in transcript_text]
+            if snippets:
+                return " ".join(snippets)
+        except Exception:
+            pass
+
+    if hasattr(YouTubeTranscriptApi, 'list_transcripts'):
+        try:
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
             for t in transcript_list:
-                return " ".join([i["text"] for i in t.fetch()])
-        except Exception as e:
-            st.error(f"An error occurred while fetching the transcript: {e}")
-            return None
+                fetched = t.fetch()
+                snippets = [i.get('text', '') if isinstance(i, dict) else getattr(i, 'text', '') for i in fetched]
+                if snippets:
+                    return " ".join(snippets)
+        except Exception:
+            pass
+
+    st.error("Could not retrieve transcript for this YouTube video. Captions or subtitles appear to be disabled or unavailable on this specific video.")
+    return None
 
 def generate_gemini_content(transcript_text, prompt):
     """Generate summary using Google's generative AI model with modern model fallbacks."""

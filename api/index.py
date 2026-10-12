@@ -91,27 +91,63 @@ def fetch_video_metadata(video_id: str) -> dict:
     }
 
 def get_transcript_text(video_id: str) -> str:
-    # 1. Direct try
+    # 1. Try modern instance API (youtube_transcript_api v1.2+)
     try:
-        t_list = YouTubeTranscriptApi.get_transcript(video_id)
-        return " ".join([item["text"] for item in t_list if item.get("text")])
+        api = YouTubeTranscriptApi()
+        if hasattr(api, 'fetch'):
+            try:
+                fetched = api.fetch(video_id)
+                snippets = []
+                for item in fetched:
+                    if hasattr(item, 'text'):
+                        snippets.append(item.text)
+                    elif isinstance(item, dict):
+                        snippets.append(item.get('text', ''))
+                if snippets:
+                    return " ".join(snippets)
+            except Exception:
+                pass
+
+        if hasattr(api, 'list'):
+            t_list = api.list(video_id)
+            for t in t_list:
+                fetched = t.fetch()
+                snippets = []
+                for item in fetched:
+                    if hasattr(item, 'text'):
+                        snippets.append(item.text)
+                    elif isinstance(item, dict):
+                        snippets.append(item.get('text', ''))
+                if snippets:
+                    return " ".join(snippets)
     except Exception:
         pass
-    
-    # 2. List transcripts & pick first available
-    try:
-        transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
-        # Try manually created first, then generated
-        for t in transcripts:
-            fetched = t.fetch()
-            return " ".join([item["text"] for item in fetched if item.get("text")])
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not retrieve transcript for this YouTube video. Captions may be disabled on this video. ({str(e)})"
-        )
-    
-    raise HTTPException(status_code=400, detail="Transcript is not available for this video.")
+
+    # 2. Try legacy classmethod API (youtube_transcript_api < 1.2)
+    if hasattr(YouTubeTranscriptApi, 'get_transcript'):
+        try:
+            t_list = YouTubeTranscriptApi.get_transcript(video_id)
+            snippets = [item.get("text", "") if isinstance(item, dict) else getattr(item, "text", "") for item in t_list]
+            if snippets:
+                return " ".join(snippets)
+        except Exception:
+            pass
+
+    if hasattr(YouTubeTranscriptApi, 'list_transcripts'):
+        try:
+            transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+            for t in transcripts:
+                fetched = t.fetch()
+                snippets = [item.get("text", "") if isinstance(item, dict) else getattr(item, "text", "") for item in fetched]
+                if snippets:
+                    return " ".join(snippets)
+        except Exception:
+            pass
+
+    raise HTTPException(
+        status_code=400,
+        detail="Could not retrieve transcript for this YouTube video. Captions or subtitles appear to be disabled or unavailable on this specific video."
+    )
 
 def query_gemini_json(prompt: str) -> Optional[dict]:
     if not api_key:
@@ -295,3 +331,4 @@ Do NOT wrap in markdown formatting code blocks. Return ONLY pure JSON."""
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api.index:app", host="0.0.0.0", port=8001, reload=False)
+
