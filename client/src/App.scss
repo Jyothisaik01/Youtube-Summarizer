@@ -134,7 +134,7 @@
 
 /* INPUT FORM CARD */
 .input-card {
-  max-width: 860px;
+  max-width: 960px;
   margin: 0 auto 3rem;
   padding: 1.75rem;
   position: relative;
@@ -209,24 +209,22 @@
 
   .controls-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
     position: relative;
     z-index: 30;
     overflow: visible;
 
     &.four-cols {
-      grid-template-columns: repeat(2, 1fr);
-      @media (min-width: 1024px) {
-        grid-template-columns: repeat(4, 1fr);
-      }
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+
       @media (max-width: 640px) {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
       }
     }
 
     @media (max-width: 640px) {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .control-group {

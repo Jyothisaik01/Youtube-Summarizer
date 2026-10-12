@@ -4,6 +4,8 @@
   gap: 0.45rem;
   position: relative;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   z-index: 50;
 
   &.disabled {
@@ -24,9 +26,13 @@
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 
     .label-icon {
       color: var(--text-secondary);
+      flex-shrink: 0;
     }
   }
 
@@ -34,7 +40,7 @@
     background: var(--bg-card);
     border: 1.5px solid var(--border-subtle);
     border-radius: 12px;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 0.9rem;
     color: var(--text-primary);
     font-size: 0.92rem;
     font-family: inherit;
@@ -43,7 +49,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.6rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 
@@ -60,10 +69,12 @@
     .trigger-left {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.5rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      min-width: 0;
+      flex: 1;
 
       .trigger-badge {
         background: rgba(255, 0, 51, 0.12);
@@ -73,16 +84,15 @@
         padding: 0.15rem 0.45rem;
         font-size: 0.72rem;
         font-weight: 700;
+        flex-shrink: 0;
       }
 
       .trigger-text {
         font-weight: 600;
         color: var(--text-primary);
-      }
-
-      .trigger-sublabel {
-        font-size: 0.8rem;
-        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     }
 

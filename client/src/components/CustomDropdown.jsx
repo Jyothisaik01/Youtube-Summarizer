@@ -55,9 +55,6 @@ export default function CustomDropdown({
             <span className="trigger-badge">{selectedOption.badge}</span>
           )}
           <span className="trigger-text">{selectedOption ? selectedOption.label : placeholder}</span>
-          {selectedOption?.sublabel && (
-            <span className="trigger-sublabel">{selectedOption.sublabel}</span>
-          )}
         </div>
         <ChevronDown size={16} className={`chevron-icon ${isOpen ? 'rotated' : ''}`} />
       </button>
