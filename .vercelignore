@@ -1,0 +1,16 @@
+# Local virtual environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Legacy folder & presentation files
+youtubee/
+*.pptx
+*.pdf
+
+# Git and logs
+.git
+.github
+*.log
