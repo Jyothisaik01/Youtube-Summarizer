@@ -21,23 +21,31 @@ import {
   HelpCircle,
   Video
 } from 'lucide-react';
+import CustomDropdown from './components/CustomDropdown';
 import confetti from 'canvas-confetti';
 import './App.scss';
 
-const LANGUAGES = [
-  { code: 'en', name: 'English', native: 'English' },
-  { code: 'hi', name: 'Hindi', native: 'हिंदी' },
-  { code: 'te', name: 'Telugu', native: 'తెలుగు' },
-  { code: 'es', name: 'Spanish', native: 'Español' },
-  { code: 'fr', name: 'French', native: 'Français' },
-  { code: 'de', name: 'German', native: 'Deutsch' },
-  { code: 'zh', name: 'Chinese', native: '中文' },
-  { code: 'ja', name: 'Japanese', native: '日本語' },
-  { code: 'ko', name: 'Korean', native: '한국어' },
-  { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
-  { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
-  { code: 'bn', name: 'Bengali', native: 'বাংলা' },
-  { code: 'ur', name: 'Urdu', native: 'اردو' }
+const DIFFICULTY_OPTIONS = [
+  { value: 'Simple', label: 'Simple', badge: 'ELI5', sublabel: 'Everyday terms & simple analogies' },
+  { value: 'Medium', label: 'Medium', badge: 'Balanced', sublabel: 'Structured academic & professional notes' },
+  { value: 'Hard', label: 'Hard', badge: 'Technical', sublabel: 'Deep technical terms & engineering depth' },
+  { value: 'Executive', label: 'Executive Brief', badge: 'High Impact', sublabel: 'Strategic metrics & bullet points' }
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English', sublabel: 'English' },
+  { value: 'hi', label: 'हिंदी', sublabel: 'Hindi' },
+  { value: 'te', label: 'తెలుగు', sublabel: 'Telugu' },
+  { value: 'es', label: 'Español', sublabel: 'Spanish' },
+  { value: 'fr', label: 'Français', sublabel: 'French' },
+  { value: 'de', label: 'Deutsch', sublabel: 'German' },
+  { value: 'zh', label: '中文', sublabel: 'Chinese' },
+  { value: 'ja', label: '日本語', sublabel: 'Japanese' },
+  { value: 'ko', label: '한국어', sublabel: 'Korean' },
+  { value: 'ta', label: 'தமிழ்', sublabel: 'Tamil' },
+  { value: 'kn', label: 'ಕನ್ನಡ', sublabel: 'Kannada' },
+  { value: 'bn', label: 'বাংলা', sublabel: 'Bengali' },
+  { value: 'ur', label: 'اردو', sublabel: 'Urdu' }
 ];
 
 const SAMPLE_VIDEOS = [
@@ -240,36 +248,25 @@ ${data.summary.action_items?.map(a => `• ${a}`).join('\n')}
           </div>
 
           <div className="controls-row">
-            <div className="control-group">
-              <label><Sliders size={13} style={{ display: 'inline', marginRight: 4 }} /> Complexity Level</label>
-              <select
-                className="custom-select"
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                disabled={loading}
-              >
-                <option value="Simple">Simple (ELI5 — Everyday terms & analogies)</option>
-                <option value="Medium">Medium (Balanced academic & professional)</option>
-                <option value="Hard">Hard (Deep technical terminology)</option>
-                <option value="Executive">Executive Brief (High-impact bullet points)</option>
-              </select>
-            </div>
+            <CustomDropdown
+              label="Complexity Level"
+              icon={Sliders}
+              options={DIFFICULTY_OPTIONS}
+              value={difficulty}
+              onChange={setDifficulty}
+              disabled={loading}
+            />
 
-            <div className="control-group">
-              <label><Globe size={13} style={{ display: 'inline', marginRight: 4 }} /> Output Language</label>
-              <select
-                className="custom-select"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                disabled={loading}
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.native} ({l.name})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <CustomDropdown
+              label="Output Language"
+              icon={Globe}
+              options={LANGUAGE_OPTIONS}
+              value={language}
+              onChange={setLanguage}
+              disabled={loading}
+              searchable={true}
+              placeholder="Search or select language..."
+            />
           </div>
 
           <div className="quick-samples">
