@@ -26,10 +26,24 @@ import confetti from 'canvas-confetti';
 import './App.scss';
 
 const DIFFICULTY_OPTIONS = [
-  { value: 'Simple', label: 'Simple', badge: 'ELI5', sublabel: 'Everyday terms & simple analogies' },
-  { value: 'Medium', label: 'Medium', badge: 'Balanced', sublabel: 'Structured academic & professional notes' },
-  { value: 'Hard', label: 'Hard', badge: 'Technical', sublabel: 'Deep technical terms & engineering depth' },
-  { value: 'Executive', label: 'Executive Brief', badge: 'High Impact', sublabel: 'Strategic metrics & bullet points' }
+  { value: 'Simple', label: 'Simple (ELI5)', badge: 'ELI5', sublabel: 'Everyday terms & playful analogies' },
+  { value: 'Medium', label: 'Medium (Balanced)', badge: 'Academic', sublabel: 'Structured college & professional notes' },
+  { value: 'Hard', label: 'Hard (Technical)', badge: 'In-Depth', sublabel: 'Technical mechanisms, formulas & architecture' },
+  { value: 'Executive', label: 'Executive Brief', badge: 'C-Suite', sublabel: 'High-impact metrics, ROI & strategic takeaways' }
+];
+
+const FORMAT_OPTIONS = [
+  { value: 'structured', label: 'Structured Breakdown', badge: 'Standard', sublabel: 'Complete 360° notes, quotes & action steps' },
+  { value: 'study_guide', label: 'Academic Study Guide', badge: 'Exam Prep', sublabel: 'Key definitions, core theories & review quiz' },
+  { value: 'bullet_cheat_sheet', label: 'Rapid Cheat Sheet', badge: 'Concise', sublabel: 'Quick-reference bullets & rules of thumb' },
+  { value: 'action_plan', label: 'Actionable Implementation', badge: 'Blueprint', sublabel: 'Step-by-step checklist of what to do next' }
+];
+
+const FOCUS_OPTIONS = [
+  { value: 'all', label: 'Entire Video (Balanced)', badge: '100% Scope', sublabel: 'Covers all topics evenly' },
+  { value: 'key_insights', label: 'Breakthrough Insights', badge: 'High Signal', sublabel: 'Focus on core revelations & epiphanies' },
+  { value: 'step_by_step', label: 'Methods & Workflows', badge: 'How-To', sublabel: 'Focus on procedures, recipes & techniques' },
+  { value: 'quotes_and_lessons', label: 'Wisdom & Philosophy', badge: 'Mindset', sublabel: 'Focus on memorable aphorisms & life lessons' }
 ];
 
 const LANGUAGE_OPTIONS = [
@@ -58,6 +72,8 @@ export default function App() {
   const [theme, setTheme] = useState('dark');
   const [url, setUrl] = useState('');
   const [difficulty, setDifficulty] = useState('Medium');
+  const [formatStyle, setFormatStyle] = useState('structured');
+  const [focusArea, setFocusArea] = useState('all');
   const [language, setLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -111,6 +127,8 @@ export default function App() {
         body: JSON.stringify({
           url: url.trim(),
           difficulty,
+          format_style: formatStyle,
+          focus_area: focusArea,
           language
         })
       });
@@ -247,13 +265,31 @@ ${data.summary.action_items?.map(a => `• ${a}`).join('\n')}
             </button>
           </div>
 
-          <div className="controls-row">
+          <div className="controls-row four-cols">
             <CustomDropdown
               label="Complexity Level"
               icon={Sliders}
               options={DIFFICULTY_OPTIONS}
               value={difficulty}
               onChange={setDifficulty}
+              disabled={loading}
+            />
+
+            <CustomDropdown
+              label="Document Format"
+              icon={FileText}
+              options={FORMAT_OPTIONS}
+              value={formatStyle}
+              onChange={setFormatStyle}
+              disabled={loading}
+            />
+
+            <CustomDropdown
+              label="Content Focus"
+              icon={Bookmark}
+              options={FOCUS_OPTIONS}
+              value={focusArea}
+              onChange={setFocusArea}
               disabled={loading}
             />
 
@@ -313,7 +349,9 @@ ${data.summary.action_items?.map(a => `• ${a}`).join('\n')}
                 <span><strong>Channel:</strong> {data.metadata?.author}</span>
                 <span><Clock size={14} /> <strong>Words:</strong> {data.transcriptStats?.totalWords?.toLocaleString()}</span>
                 <span><FileText size={14} /> <strong>Est. Read:</strong> ~{data.transcriptStats?.estimatedReadMinutes} mins</span>
-                <span><Sliders size={14} /> <strong>Format:</strong> {data.difficulty}</span>
+                <span className="pill-tag difficulty-pill"><Sliders size={13} /> {data.difficulty}</span>
+                {data.format_style && <span className="pill-tag format-pill"><FileText size={13} /> {data.format_style.replace('_', ' ')}</span>}
+                {data.focus_area && <span className="pill-tag focus-pill"><Bookmark size={13} /> {data.focus_area.replace('_', ' ')}</span>}
               </div>
             </div>
           </div>

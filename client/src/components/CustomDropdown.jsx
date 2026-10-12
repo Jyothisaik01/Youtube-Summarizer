@@ -36,7 +36,7 @@ export default function CustomDropdown({
     : options;
 
   return (
-    <div className={`custom-dropdown-container ${disabled ? 'disabled' : ''}`} ref={dropdownRef}>
+    <div className={`custom-dropdown-container ${isOpen ? 'is-open' : ''} ${disabled ? 'disabled' : ''}`} ref={dropdownRef}>
       {label && (
         <label className="dropdown-label">
           {Icon && <Icon size={13} className="label-icon" />}
@@ -115,3 +115,4 @@ export default function CustomDropdown({
     </div>
   );
 }
+

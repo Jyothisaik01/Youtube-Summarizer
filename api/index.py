@@ -180,6 +180,8 @@ class SummarizeRequest(BaseModel):
     url: str
     difficulty: Optional[str] = "Medium" # Simple, Medium, Hard, Executive
     language: Optional[str] = "en" # language code
+    format_style: Optional[str] = "structured" # structured, study_guide, bullet_cheat_sheet, action_plan
+    focus_area: Optional[str] = "all" # all, key_insights, step_by_step, quotes_and_lessons
 
 @app.get("/api/health")
 def health():
@@ -211,58 +213,109 @@ def summarize_video(req: SummarizeRequest):
     lang_name = lang_info["name"]
     lang_native = lang_info["native"]
 
-    complexity_instructions = {
-        "Simple": "Explain simply like I'm 12 years old. Use crystal-clear analogies, short sentences, and everyday vocabulary.",
-        "Medium": "Balanced, comprehensive notes for students and working professionals. Clear, structured, and informative.",
-        "Hard": "Deep technical analysis. Highlight specific terminology, methodologies, engineering details, and nuanced insights.",
-        "Executive": "Executive brief format. High-impact bullet points, actionable takeaways, strategic implications, and core metrics."
+    # Differentiated complexity and tone directives
+    complexity_directives = {
+        "Simple": (
+            "TONE & STYLE: Explain like I am 12 years old (ELI5). "
+            "Use clear, playful, crystal-clear real-life analogies. Use short sentences, friendly vocabulary, "
+            "and eliminate any confusing jargon or explain it immediately with child-friendly examples. "
+            "Make the notes feel like an exciting story or animated lesson."
+        ),
+        "Medium": (
+            "TONE & STYLE: Comprehensive, balanced academic & professional study notes. "
+            "Structure thoughts logically with clear paragraphs, practical examples, cause-and-effect reasoning, "
+            "and thorough context for university students and knowledge workers."
+        ),
+        "Hard": (
+            "TONE & STYLE: Rigorous deep technical analysis. "
+            "Exhaustively deconstruct architecture, engineering methodologies, mathematical or scientific models, "
+            "domain-specific terminology, edge cases, underlying mechanisms, and theoretical underpinnings. "
+            "Assume the reader is a subject-matter expert or senior researcher."
+        ),
+        "Executive": (
+            "TONE & STYLE: High-level C-Suite Executive Briefing. "
+            "Strictly concise, zero fluff, high signal-to-noise ratio. Focus heavily on bottom-line impact, "
+            "strategic trade-offs, ROI, market/operational implications, timeline horizons, and critical decision points. "
+            "Every takeaway should read like a strategic board memorandum."
+        )
     }.get(req.difficulty, "Balanced, comprehensive, clear notes.")
 
-    prompt = f"""You are YouTube Summarizer AI, a world-class educational analyst, summarizer, and notes creator.
-Video Title: "{metadata['title']}"
-Target Complexity Level: {req.difficulty} ({complexity_instructions})
-Required Language: {lang_name} ({lang_native})
+    format_directives = {
+        "structured": "FORMATTING: Complete multi-dimensional breakdown across takeaways, chronological topic deep dives, memorable quotes, and practical action items.",
+        "study_guide": "FORMATTING: Academic Study Guide. Group detailed notes with concept definitions, key exam-worthy points, and critical review questions in action items.",
+        "bullet_cheat_sheet": "FORMATTING: Rapid-Reference Cheat Sheet. Heavy focus on quick-reference bullet points, rules of thumb, and syntax/workflow snippets.",
+        "action_plan": "FORMATTING: 100% Practical Implementation Blueprint. Prioritize the step-by-step checklist of what the viewer should execute immediately after watching."
+    }.get(req.format_style, "Comprehensive structured breakdown.")
 
-TRANSCRIPT TEXT:
+    focus_directives = {
+        "all": "FOCUS: Cover the entire spectrum of the video evenly.",
+        "key_insights": "FOCUS: Zero in exclusively on the most breakthrough, non-obvious revelations and core arguments.",
+        "step_by_step": "FOCUS: Emphasize the chronological procedure, methods, tools, and workflows demonstrated.",
+        "quotes_and_lessons": "FOCUS: Emphasize philosophy, mindsets, notable aphorisms, and personal experiences shared by the speaker."
+    }.get(req.focus_area, "Balanced coverage.")
+
+    prompt = f"""You are TubeNotes AI, a world-class educational analyst, executive intelligence researcher, and master notes creator.
+
+TARGET VIDEO: "{metadata['title']}" by {metadata['author']}
+COMPLEXITY LEVEL: {req.difficulty.upper()}
+{complexity_directives}
+
+DOCUMENT FORMAT: {req.format_style.upper()}
+{format_directives}
+
+CONTENT EMPHASIS:
+{focus_directives}
+
+LANGUAGE TARGET: {lang_name} ({lang_native})
+CRITICAL INSTRUCTION: Every single title, sentence, bullet, and explanation MUST be written naturally and eloquently in {lang_name} ({lang_native}).
+
+VIDEO TRANSCRIPT:
 \"\"\"{trimmed_transcript}\"\"\"
 
-Generate an engaging, structured, and highly readable summary of this video.
-Every field and sentence MUST be translated and written naturally in {lang_name} ({lang_native}).
+Generate an impactful, highly customized summary that STRICTLY REFLECTS the requested {req.difficulty.upper()} complexity and {req.format_style.upper()} formatting.
+Do NOT output a generic summary. The tone, sentence length, and depth MUST radically shift according to the requested level.
 
 Respond ONLY with a valid, clean JSON object with this exact structure:
 {{
-  "title": "A compelling, clear translated title for this summary in {lang_name}",
-  "tldr": "A punchy 2-3 sentence executive summary capturing the core premise and conclusion in {lang_name}.",
+  "title": "A compelling, distinct title for this summary in {lang_name} reflecting the {req.difficulty} tone",
+  "difficulty_badge": "{req.difficulty}",
+  "tldr": "A 2-3 sentence executive summary capturing the core premise and conclusion in {lang_name}, strictly matching the {req.difficulty} tone.",
   "key_takeaways": [
     "Key takeaway point 1 in {lang_name}",
     "Key takeaway point 2 in {lang_name}",
     "Key takeaway point 3 in {lang_name}",
     "Key takeaway point 4 in {lang_name}",
-    "Key takeaway point 5 in {lang_name}"
+    "Key takeaway point 5 in {lang_name}",
+    "Key takeaway point 6 in {lang_name}"
   ],
   "detailed_notes": [
     {{
       "section_title": "Section or Topic 1 in {lang_name}",
-      "content": "Detailed explanation, concepts covered, and examples in {lang_name}."
+      "content": "In-depth explanation and specific details in {lang_name} adhering to {req.difficulty} complexity."
     }},
     {{
       "section_title": "Section or Topic 2 in {lang_name}",
-      "content": "Detailed explanation in {lang_name}."
+      "content": "In-depth explanation in {lang_name}."
     }},
     {{
       "section_title": "Section or Topic 3 in {lang_name}",
-      "content": "Detailed explanation in {lang_name}."
+      "content": "In-depth explanation in {lang_name}."
+    }},
+    {{
+      "section_title": "Section or Topic 4 in {lang_name}",
+      "content": "In-depth explanation in {lang_name}."
     }}
   ],
   "quotes_or_highlights": [
-    "Memorable thought or important statement in {lang_name}",
-    "Another notable highlight or insight in {lang_name}"
+    "Notable quotation or high-impact statement in {lang_name}",
+    "Another memorable highlight in {lang_name}"
   ],
   "action_items": [
-    "Actionable step or recommendation 1 in {lang_name}",
-    "Actionable step or recommendation 2 in {lang_name}"
+    "Concrete actionable step or exercise 1 in {lang_name}",
+    "Concrete actionable step or exercise 2 in {lang_name}",
+    "Concrete actionable step or exercise 3 in {lang_name}"
   ],
-  "audio_script": "A lively, natural 3-sentence spoken summary in {lang_name} explaining what this video was about and the #1 takeaway, suitable for text-to-speech."
+  "audio_script": "A natural 3-sentence spoken summary in {lang_name} capturing the big idea and takeaway, written for audio text-to-speech."
 }}
 Do NOT wrap in markdown formatting code blocks. Return ONLY pure JSON."""
 
@@ -323,6 +376,8 @@ Do NOT wrap in markdown formatting code blocks. Return ONLY pure JSON."""
             "estimatedReadMinutes": estimated_read_minutes
         },
         "difficulty": req.difficulty,
+        "format_style": req.format_style,
+        "focus_area": req.focus_area,
         "language": req.language,
         "summary": gemini_result,
         "audio_base64": audio_base64

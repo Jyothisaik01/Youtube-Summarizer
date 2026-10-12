@@ -4,10 +4,15 @@
   gap: 0.45rem;
   position: relative;
   width: 100%;
+  z-index: 50;
 
   &.disabled {
     opacity: 0.6;
     pointer-events: none;
+  }
+
+  &.is-open {
+    z-index: 100;
   }
 
   .dropdown-label {
@@ -98,11 +103,11 @@
     top: calc(100% + 6px);
     left: 0;
     right: 0;
-    z-index: 100;
-    background: #0a0a0a;
-    border: 1px solid var(--border-highlight);
+    z-index: 9999;
+    background: #0d0d0d;
+    border: 1px solid #333333;
     border-radius: 14px;
-    box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
     overflow: hidden;
     animation: dropdownSlideDown 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
@@ -249,3 +254,4 @@
     transform: translateY(0) scale(1);
   }
 }
+
