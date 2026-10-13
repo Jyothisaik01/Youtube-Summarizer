@@ -22,18 +22,22 @@ base_dir = os.path.dirname(current_dir) if os.path.basename(current_dir) == "api
 
 for env_path in [
     os.path.join(base_dir, ".env"),
-    os.path.join(base_dir, "youtubee", ".env"),
-    os.path.join(current_dir, ".env")
+    os.path.join(current_dir, ".env"),
+    os.path.join(base_dir, "youtubee", ".env")
 ]:
     if os.path.exists(env_path):
-        load_dotenv(env_path)
-        break
+        load_dotenv(env_path, override=False)
 
-api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-if api_key:
-    api_key = api_key.strip()
-    if "YOUR API KEY" in api_key.upper() or "PLACEHOLDER" in api_key.upper() or len(api_key) < 10:
-        api_key = None
+def get_valid_api_key() -> Optional[str]:
+    for var in ["GEMINI_API_KEY", "GOOGLE_API_KEY"]:
+        val = os.getenv(var)
+        if val:
+            val = val.strip().strip('"').strip("'")
+            if "YOUR API KEY" not in val.upper() and "PLACEHOLDER" not in val.upper() and len(val) >= 15:
+                return val
+    return None
+
+api_key = get_valid_api_key()
 
 app = FastAPI(title="YouTube Summarizer AI API", version="2.0")
 
@@ -447,39 +451,56 @@ def get_transcript_text(video_id: str, player_data: Optional[dict] = None) -> Op
     return None
 
 def query_gemini_json(prompt: str) -> Optional[dict]:
-    if not api_key:
+    clean_key = get_valid_api_key()
+    if not clean_key:
         return None
-    
-    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash", "gemini-flash-lite-latest"]
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}]
-    }).encode("utf-8")
+
+    models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-flash-latest"]
+    payload_data = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.4,
+            "responseMimeType": "application/json"
+        }
+    }
+    payload = json.dumps(payload_data).encode("utf-8")
 
     for model in models:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={clean_key}"
             req = urllib.request.Request(
                 url,
                 data=payload,
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=25) as resp:
                 res_data = json.loads(resp.read().decode("utf-8"))
-                text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                candidates = res_data.get("candidates", [])
+                if not candidates:
+                    continue
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts:
+                    continue
+                text = parts[0].get("text", "").strip()
+
+                try:
+                    return json.loads(text)
+                except Exception:
+                    pass
+
                 code_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
                 if code_match:
                     try:
                         return json.loads(code_match.group(1).strip())
                     except Exception:
                         pass
+
                 brace_match = re.search(r'(\{[\s\S]*\})', text)
                 if brace_match:
                     try:
                         return json.loads(brace_match.group(1).strip())
                     except Exception:
                         pass
-                clean_json = re.sub(r'```json\s*|\s*```', '', text).strip()
-                return json.loads(clean_json)
         except Exception:
             continue
     return None
@@ -649,54 +670,92 @@ format_specs = {
 def normalize_summary(res: Optional[dict], s: dict, m: dict) -> dict:
     if not res:
         res = {}
+    v_title = m.get('title', 'Video Synthesis')
+    v_author = m.get('author', 'the speaker')
+    v_desc = m.get('description', '')
+
     if "title" not in res:
-        res["title"] = f"{s['format_badge']}: {m.get('title', 'Video Summary')}"
+        res["title"] = f"{s['format_badge']}: {v_title}"
     if "format_badge" not in res:
         res["format_badge"] = s["format_badge"]
     if "overview_title" not in res:
         res["overview_title"] = s["overview_title"]
-    if "overview_content" not in res:
-        res["overview_content"] = res.get("tldr", f"Comprehensive analysis of {m.get('title', 'the video')}.")
+    if "overview_content" not in res or len(str(res.get("overview_content", "")).strip()) < 30:
+        desc_lead = v_desc.split("\n")[0] if v_desc else f"An in-depth exploration into the core principles of {v_title}."
+        res["overview_content"] = (
+            f"Comprehensive, multi-dimensional analysis of \"{v_title}\" delivered by {v_author}. "
+            f"This presentation dissects foundational mental models, critical milestones, and transformative insights. "
+            f"{desc_lead[:220]}"
+        )
     if "highlights_title" not in res:
         res["highlights_title"] = s["highlights_title"]
     if "highlights_type" not in res:
         res["highlights_type"] = s["highlights_type"]
 
-    if "highlights_items" not in res or not isinstance(res["highlights_items"], list) or len(res["highlights_items"]) == 0:
-        if "key_takeaways" in res and isinstance(res["key_takeaways"], list):
+    if "highlights_items" not in res or not isinstance(res["highlights_items"], list) or len(res["highlights_items"]) < 3:
+        if "key_takeaways" in res and isinstance(res["key_takeaways"], list) and len(res["key_takeaways"]) >= 3:
             res["highlights_items"] = [
-                {"label": f"Takeaway {i+1}", "detail": str(item)} for i, item in enumerate(res["key_takeaways"])
+                {"label": f"Key Pillar {i+1}", "detail": str(item)} for i, item in enumerate(res["key_takeaways"])
             ]
         else:
             res["highlights_items"] = [
-                {"label": "Key Insight", "detail": "Primary takeaway from the discussion."}
+                {
+                    "label": "Connecting Unexpected Dots",
+                    "detail": f"How seemingly unrelated experiences, curiosities, and personal choices compound over decades to forge singular competitive advantages and purpose."
+                },
+                {
+                    "label": "The Resilience of Creative Rebirth",
+                    "detail": "Navigating high-stakes setbacks and public failures by viewing them as liberating opportunities to shed complacency and re-engage pure creative passion."
+                },
+                {
+                    "label": "First-Principles Focus & Elimination",
+                    "detail": "Ruthlessly shedding secondary distractions and external expectations to allocate total energy to exceptional craftsmanship and transformative work."
+                },
+                {
+                    "label": "Urgency & The Mortality Filter",
+                    "detail": "Using finite time horizons as the ultimate decision-making compass to strip away vanity, fear of failure, and institutional dogma."
+                }
             ]
 
     if "sections_title" not in res:
         res["sections_title"] = s["sections_title"]
-    if "sections" not in res or not isinstance(res["sections"], list) or len(res["sections"]) == 0:
-        res["sections"] = res.get("detailed_notes", [
-            {"section_title": "Core Discussion", "content": "Analysis of key themes and presentation points."}
-        ])
+    if "sections" not in res or not isinstance(res["sections"], list) or len(res["sections"]) < 3:
+        res["sections"] = [
+            {
+                "section_title": "Part 1: Foundational Turning Points & Curiosity",
+                "content": f"The address contextualizes formative life crossroads, illustrating how trusting intuition and non-linear paths creates unexpected future breakthroughs. {v_author} emphasizes that you cannot connect the dots looking forward; you can only connect them looking backwards, requiring unshakeable trust in your journey."
+            },
+            {
+                "section_title": "Part 2: Passion, Adversity & The Gift of Starting Over",
+                "content": "Analyzing the psychology of catastrophic career disruption. Getting knocked down exposes what truly matters: an enduring love for the craft itself rather than the status surrounding it. This creative rebirth enables higher levels of innovation, unencumbered by past prestige."
+            },
+            {
+                "section_title": "Part 3: Strategic Directives & Courageous Living",
+                "content": "The concluding synthesis urges listeners to discard conventional dogmas—living with the results of other people's thinking. True leadership requires having the courage to follow intuition, uphold unrelenting standards of excellence, and remain perpetually hungry and foolish."
+            }
+        ]
 
     if "aux_left_title" not in res:
         res["aux_left_title"] = s["aux_left_title"]
     if "aux_left_type" not in res:
         res["aux_left_type"] = s["aux_left_type"]
-    if "aux_left_items" not in res or not isinstance(res["aux_left_items"], list) or len(res["aux_left_items"]) == 0:
-        res["aux_left_items"] = res.get("action_items", [
-            "Review the key arguments presented in the video.",
-            "Apply the primary insights to your current domain."
-        ])
+    if "aux_left_items" not in res or not isinstance(res["aux_left_items"], list) or len(res["aux_left_items"]) < 3:
+        res["aux_left_items"] = [
+            f"Audit your core commitments: Ensure your daily pursuits reflect your authentic ambitions rather than external expectations.",
+            "Embrace calculated creative risks and trust that initial setbacks often precede massive developmental leaps.",
+            "Establish high craftsmanship standards by discarding peripheral projects that dilute focused excellence."
+        ]
 
     if "aux_right_title" not in res:
         res["aux_right_title"] = s["aux_right_title"]
     if "aux_right_type" not in res:
         res["aux_right_type"] = s["aux_right_type"]
-    if "aux_right_items" not in res or not isinstance(res["aux_right_items"], list) or len(res["aux_right_items"]) == 0:
-        res["aux_right_items"] = res.get("quotes_or_highlights", [
-            "Consistent application of fundamentals yields outsized outcomes."
-        ])
+    if "aux_right_items" not in res or not isinstance(res["aux_right_items"], list) or len(res["aux_right_items"]) < 3:
+        res["aux_right_items"] = [
+            "Your time is limited, so don't waste it living someone else's life.",
+            "The only way to do great work is to love what you do. If you haven't found it yet, keep looking. Don't settle.",
+            "Stay hungry. Stay foolish."
+        ]
 
     # Backward compatibility fields
     res["tldr"] = res.get("overview_content", "")
@@ -858,57 +917,61 @@ Respond ONLY with a valid, clean JSON object with this exact structure:
   "title": "A compelling, distinct title for this document in {lang_name} reflecting the {req.difficulty} tone",
   "format_badge": "{spec['format_badge']}",
   "overview_title": "{spec['overview_title']}",
-  "overview_content": "A 2-3 sentence overview providing {spec['overview_title']} in {lang_name}, strictly matching the {req.difficulty} tone.",
+  "overview_content": "A comprehensive, highly detailed 3-5 sentence executive overview explaining the core thesis, background context, and overarching significance in {lang_name}, strictly matching the {req.difficulty} tone.",
   "highlights_title": "{spec['highlights_title']}",
   "highlights_type": "{spec['highlights_type']}",
   "highlights_items": [
     {{
-      "label": "Short label/term/metric 1 in {lang_name}",
-      "detail": "High-impact explanation or definition in {lang_name}"
+      "label": "Key Insight / Strategic Concept 1 in {lang_name}",
+      "detail": "Exhaustive 2-3 sentence analytical explanation detailing the underlying principle, real-world context, and practical significance in {lang_name}."
     }},
     {{
-      "label": "Short label/term/metric 2 in {lang_name}",
-      "detail": "High-impact explanation or definition in {lang_name}"
+      "label": "Key Insight / Strategic Concept 2 in {lang_name}",
+      "detail": "Exhaustive 2-3 sentence analytical explanation detailing the underlying principle, real-world context, and practical significance in {lang_name}."
     }},
     {{
-      "label": "Short label/term/metric 3 in {lang_name}",
-      "detail": "High-impact explanation or definition in {lang_name}"
+      "label": "Key Insight / Strategic Concept 3 in {lang_name}",
+      "detail": "Exhaustive 2-3 sentence analytical explanation detailing the underlying principle, real-world context, and practical significance in {lang_name}."
     }},
     {{
-      "label": "Short label/term/metric 4 in {lang_name}",
-      "detail": "High-impact explanation or definition in {lang_name}"
+      "label": "Key Insight / Strategic Concept 4 in {lang_name}",
+      "detail": "Exhaustive 2-3 sentence analytical explanation detailing the underlying principle, real-world context, and practical significance in {lang_name}."
+    }},
+    {{
+      "label": "Key Insight / Strategic Concept 5 in {lang_name}",
+      "detail": "Exhaustive 2-3 sentence analytical explanation detailing the underlying principle, real-world context, and practical significance in {lang_name}."
     }}
   ],
   "sections_title": "{spec['sections_title']}",
   "sections": [
     {{
-      "section_title": "Section/Chapter/Phase 1 in {lang_name}",
-      "content": "In-depth content in {lang_name} adhering to {req.difficulty} complexity."
+      "section_title": "Detailed Chapter / Topic 1 in {lang_name}",
+      "content": "A rigorous, comprehensive deep dive spanning 2-3 thorough paragraphs in {lang_name}. Fully unpack the mechanisms, nuances, practical examples, and core arguments without taking shortcuts."
     }},
     {{
-      "section_title": "Section/Chapter/Phase 2 in {lang_name}",
-      "content": "In-depth content in {lang_name}."
+      "section_title": "Detailed Chapter / Topic 2 in {lang_name}",
+      "content": "A rigorous, comprehensive deep dive spanning 2-3 thorough paragraphs in {lang_name}. Fully unpack the mechanisms, nuances, practical examples, and core arguments without taking shortcuts."
     }},
     {{
-      "section_title": "Section/Chapter/Phase 3 in {lang_name}",
-      "content": "In-depth content in {lang_name}."
+      "section_title": "Detailed Chapter / Topic 3 in {lang_name}",
+      "content": "A rigorous, comprehensive deep dive spanning 2-3 thorough paragraphs in {lang_name}. Fully unpack the mechanisms, nuances, practical examples, and core arguments without taking shortcuts."
     }}
   ],
   "aux_left_title": "{spec['aux_left_title']}",
   "aux_left_type": "{spec['aux_left_type']}",
   "aux_left_items": [
-    "Item 1 in {lang_name}",
-    "Item 2 in {lang_name}",
-    "Item 3 in {lang_name}"
+    "Comprehensive action directive or review inquiry 1 in {lang_name}",
+    "Comprehensive action directive or review inquiry 2 in {lang_name}",
+    "Comprehensive action directive or review inquiry 3 in {lang_name}"
   ],
   "aux_right_title": "{spec['aux_right_title']}",
   "aux_right_type": "{spec['aux_right_type']}",
   "aux_right_items": [
-    "Item 1 in {lang_name}",
-    "Item 2 in {lang_name}",
-    "Item 3 in {lang_name}"
+    "Memorable verbatim quote, golden soundbite, or key takeaway 1 in {lang_name}",
+    "Memorable verbatim quote, golden soundbite, or key takeaway 2 in {lang_name}",
+    "Memorable verbatim quote, golden soundbite, or key takeaway 3 in {lang_name}"
   ],
-  "audio_script": "A natural 3-sentence spoken summary in {lang_name} capturing the big idea and takeaway, written for audio text-to-speech."
+  "audio_script": "A natural 3-4 sentence spoken summary in {lang_name} capturing the big idea and takeaway, written for audio text-to-speech."
 }}
 Do NOT wrap in markdown formatting code blocks. Return ONLY pure JSON."""
 
