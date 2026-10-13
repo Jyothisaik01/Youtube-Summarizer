@@ -3,6 +3,8 @@ import re
 import json
 import io
 import base64
+import html
+import xml.etree.ElementTree as ET
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -28,6 +30,10 @@ for env_path in [
         break
 
 api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+if api_key:
+    api_key = api_key.strip()
+    if "YOUR API KEY" in api_key.upper() or "PLACEHOLDER" in api_key.upper() or len(api_key) < 10:
+        api_key = None
 
 app = FastAPI(title="YouTube Summarizer AI API", version="2.0")
 
@@ -69,67 +75,321 @@ def extract_video_id(url: str) -> Optional[str]:
             return m.group(1)
     return None
 
-def fetch_video_metadata(video_id: str) -> dict:
+def get_innertube_player_data(video_id: str) -> Optional[dict]:
+    """Fetch video metadata and caption track list directly from YouTube's Innertube API."""
+    clients = [
+        {
+            "clientName": "ANDROID",
+            "clientVersion": "19.09.37",
+            "userAgent": "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip"
+        },
+        {
+            "clientName": "IOS",
+            "clientVersion": "19.09.3",
+            "userAgent": "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 16_0 like Mac OS X)"
+        },
+        {
+            "clientName": "WEB",
+            "clientVersion": "2.20240301.01.00",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        }
+    ]
+
+    url = "https://www.youtube.com/youtubei/v1/player"
+    for client in clients:
+        try:
+            payload = json.dumps({
+                "context": {
+                    "client": {
+                        "clientName": client["clientName"],
+                        "clientVersion": client["clientVersion"],
+                        "hl": "en",
+                        "gl": "US"
+                    }
+                },
+                "videoId": video_id
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": client["userAgent"],
+                    "Accept-Language": "en-US,en;q=0.9"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data and ("videoDetails" in data or "captions" in data):
+                    return data
+        except Exception:
+            continue
+    return None
+
+def fetch_video_metadata(video_id: str, player_data: Optional[dict] = None) -> dict:
     title = f"YouTube Video ({video_id})"
     author = "YouTube Creator"
-    try:
-        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
-        req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            title = data.get("title", title)
-            author = data.get("author_name", author)
-    except Exception:
-        pass
-    
+    description = ""
+    length_seconds = 0
+
+    if player_data and "videoDetails" in player_data:
+        v_details = player_data["videoDetails"]
+        title = v_details.get("title") or title
+        author = v_details.get("author") or author
+        description = v_details.get("shortDescription") or ""
+        try:
+            length_seconds = int(v_details.get("lengthSeconds", 0))
+        except Exception:
+            pass
+
+    # Supplemental check via oEmbed if title is still default
+    if title.startswith("YouTube Video (") or author == "YouTube Creator":
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                title = data.get("title", title)
+                author = data.get("author_name", author)
+        except Exception:
+            pass
+
     return {
         "videoId": video_id,
         "title": title,
         "author": author,
+        "description": description[:3000] if description else "",
+        "lengthSeconds": length_seconds,
         "thumbnail": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
         "thumbnailFallback": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
     }
 
-def get_transcript_text(video_id: str) -> str:
-    # 1. Try modern instance API (youtube_transcript_api v1.2+)
+def extract_transcript_from_innertube(player_data: dict) -> Optional[str]:
+    """Parse captionTracks from Innertube player response and fetch timedtext captions."""
+    if not player_data:
+        return None
+
+    caption_tracks = (
+        player_data.get("captions", {})
+        .get("playerCaptionsTracklistRenderer", {})
+        .get("captionTracks", [])
+    )
+    if not caption_tracks:
+        return None
+
+    def track_score(t):
+        lang = str(t.get("languageCode", "")).lower()
+        vss = str(t.get("vssId", "")).lower()
+        score = 0
+        if lang.startswith("en") or "en" in vss:
+            score += 10
+        if t.get("kind") != "asr":
+            score += 5
+        return score
+
+    sorted_tracks = sorted(caption_tracks, key=track_score, reverse=True)
+
+    for track in sorted_tracks:
+        base_url = track.get("baseUrl")
+        if not base_url:
+            continue
+
+        # Strategy A: Try JSON3 timedtext
+        try:
+            json_url = f"{base_url}&fmt=json3"
+            req = urllib.request.Request(
+                json_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            )
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                content = resp.read().decode("utf-8")
+                j_data = json.loads(content)
+                snippets = []
+                for event in j_data.get("events", []):
+                    for seg in event.get("segs", []):
+                        txt = seg.get("utf8", "").strip()
+                        if txt and txt != "\n":
+                            snippets.append(txt)
+                if snippets:
+                    return " ".join(snippets)
+        except Exception:
+            pass
+
+        # Strategy B: Try raw XML timedtext
+        try:
+            req = urllib.request.Request(
+                base_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            )
+            with urllib.request.urlopen(req, timeout=7) as resp:
+                xml_content = resp.read().decode("utf-8", errors="ignore")
+                try:
+                    root = ET.fromstring(xml_content)
+                    snippets = [
+                        html.unescape(elem.text).strip()
+                        for elem in root.iter("text")
+                        if elem.text and elem.text.strip()
+                    ]
+                    if snippets:
+                        return " ".join(snippets)
+                except Exception:
+                    pass
+
+                raw_matches = re.findall(r'<text[^>]*>(.*?)</text>', xml_content, re.DOTALL)
+                if raw_matches:
+                    clean_snippets = [
+                        html.unescape(re.sub(r'<[^>]+>', '', m)).strip()
+                        for m in raw_matches
+                        if m.strip()
+                    ]
+                    if clean_snippets:
+                        return " ".join(clean_snippets)
+        except Exception:
+            pass
+
+    return None
+
+def extract_transcript_from_web_scrape(video_id: str) -> Optional[str]:
+    """Scrape watch page directly to locate captionTracks within ytInitialPlayerResponse."""
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Cookie": "CONSENT=YES+cb.20210328-17-p0.en+FX+478"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            html_text = resp.read().decode("utf-8", errors="ignore")
+
+        match = re.search(r'"captionTracks":\s*(\[.*?\])', html_text)
+        if match:
+            tracks = json.loads(match.group(1))
+            if tracks:
+                return extract_transcript_from_innertube({
+                    "captions": {
+                        "playerCaptionsTracklistRenderer": {
+                            "captionTracks": tracks
+                        }
+                    }
+                })
+    except Exception:
+        pass
+    return None
+
+def extract_transcript_from_timedtext_endpoint(video_id: str) -> Optional[str]:
+    """Query YouTube public timedtext XML endpoints directly."""
+    for lang in ["en", "en-US", "en-GB", "a.en"]:
+        for base in ["https://www.youtube.com/api/timedtext", "https://video.google.com/timedtext"]:
+            try:
+                url = f"{base}?v={video_id}&lang={lang}"
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    xml_content = resp.read().decode("utf-8", errors="ignore")
+                    if "<text" in xml_content:
+                        root = ET.fromstring(xml_content)
+                        snippets = [
+                            html.unescape(elem.text).strip()
+                            for elem in root.iter("text")
+                            if elem.text and elem.text.strip()
+                        ]
+                        if snippets:
+                            return " ".join(snippets)
+            except Exception:
+                continue
+    return None
+
+def extract_transcript_from_invidious_mirrors(video_id: str) -> Optional[str]:
+    """Query public mirror caption endpoints."""
+    instances = [
+        "https://inv.nadeko.net",
+        "https://invidious.nerdvpn.de",
+        "https://yewtu.be",
+        "https://iv.melmac.space"
+    ]
+    for inst in instances:
+        try:
+            url = f"{inst}/api/v1/captions/{video_id}"
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            )
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                captions = data.get("captions", [])
+                if not captions:
+                    continue
+                chosen = captions[0]
+                for c in captions:
+                    if str(c.get("languageCode", "")).startswith("en"):
+                        chosen = c
+                        break
+                cap_url = chosen.get("url")
+                if cap_url:
+                    if cap_url.startswith("/"):
+                        cap_url = f"{inst}{cap_url}"
+                    sub_req = urllib.request.Request(
+                        cap_url,
+                        headers={"User-Agent": "Mozilla/5.0"}
+                    )
+                    with urllib.request.urlopen(sub_req, timeout=5) as sub_resp:
+                        raw = sub_resp.read().decode("utf-8", errors="ignore")
+                        lines = [
+                            line.strip() for line in raw.split("\n")
+                            if line.strip()
+                            and not line.startswith("WEBVTT")
+                            and not "-->" in line
+                            and not line.isdigit()
+                        ]
+                        if lines:
+                            return " ".join(lines)
+        except Exception:
+            continue
+    return None
+
+def extract_transcript_from_library(video_id: str) -> Optional[str]:
+    """Attempt youtube_transcript_api library extraction."""
+    languages = ['en', 'en-US', 'en-GB', 'hi', 'te', 'es', 'fr', 'de', 'ja', 'ko', 'zh-Hans', 'zh-Hant']
+
     try:
         api = YouTubeTranscriptApi()
         if hasattr(api, 'fetch'):
             try:
-                fetched = api.fetch(video_id)
-                snippets = []
-                for item in fetched:
-                    if hasattr(item, 'text'):
-                        snippets.append(item.text)
-                    elif isinstance(item, dict):
-                        snippets.append(item.get('text', ''))
-                if snippets:
-                    return " ".join(snippets)
+                fetched = api.fetch(video_id, languages=languages)
+                snippets = [item.text if hasattr(item, 'text') else item.get('text', '') for item in fetched]
+                clean = [s.strip() for s in snippets if s.strip()]
+                if clean:
+                    return " ".join(clean)
             except Exception:
                 pass
 
         if hasattr(api, 'list'):
-            t_list = api.list(video_id)
-            for t in t_list:
-                fetched = t.fetch()
-                snippets = []
-                for item in fetched:
-                    if hasattr(item, 'text'):
-                        snippets.append(item.text)
-                    elif isinstance(item, dict):
-                        snippets.append(item.get('text', ''))
-                if snippets:
-                    return " ".join(snippets)
+            try:
+                t_list = api.list(video_id)
+                for t in t_list:
+                    fetched = t.fetch()
+                    snippets = [item.text if hasattr(item, 'text') else item.get('text', '') for item in fetched]
+                    clean = [s.strip() for s in snippets if s.strip()]
+                    if clean:
+                        return " ".join(clean)
+            except Exception:
+                pass
     except Exception:
         pass
 
-    # 2. Try legacy classmethod API (youtube_transcript_api < 1.2)
     if hasattr(YouTubeTranscriptApi, 'get_transcript'):
         try:
-            t_list = YouTubeTranscriptApi.get_transcript(video_id)
+            t_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
             snippets = [item.get("text", "") if isinstance(item, dict) else getattr(item, "text", "") for item in t_list]
-            if snippets:
-                return " ".join(snippets)
+            clean = [s.strip() for s in snippets if s.strip()]
+            if clean:
+                return " ".join(clean)
         except Exception:
             pass
 
@@ -139,21 +399,58 @@ def get_transcript_text(video_id: str) -> str:
             for t in transcripts:
                 fetched = t.fetch()
                 snippets = [item.get("text", "") if isinstance(item, dict) else getattr(item, "text", "") for item in fetched]
-                if snippets:
-                    return " ".join(snippets)
+                clean = [s.strip() for s in snippets if s.strip()]
+                if clean:
+                    return " ".join(clean)
         except Exception:
             pass
 
-    raise HTTPException(
-        status_code=400,
-        detail="Could not retrieve transcript for this YouTube video. Captions or subtitles appear to be disabled or unavailable on this specific video."
-    )
+    return None
+
+def get_transcript_text(video_id: str, player_data: Optional[dict] = None) -> Optional[str]:
+    """
+    Robust multi-tier transcript retriever with 6 fallback strategies:
+    1. Direct Innertube Android/iOS/Web API captionTracks extraction
+    2. Direct YouTube/Google timedtext XML endpoints
+    3. YouTube watch page HTML parsing for captionTracks
+    4. YouTubeTranscriptApi Python library
+    5. Public mirror / Invidious caption endpoints
+    Returns transcript text if found, or None for AI knowledge synthesis.
+    """
+    if player_data:
+        t = extract_transcript_from_innertube(player_data)
+        if t and len(t.strip()) > 30:
+            return t
+
+    innertube_data = get_innertube_player_data(video_id)
+    if innertube_data:
+        t = extract_transcript_from_innertube(innertube_data)
+        if t and len(t.strip()) > 30:
+            return t
+
+    t = extract_transcript_from_timedtext_endpoint(video_id)
+    if t and len(t.strip()) > 30:
+        return t
+
+    t = extract_transcript_from_web_scrape(video_id)
+    if t and len(t.strip()) > 30:
+        return t
+
+    t = extract_transcript_from_library(video_id)
+    if t and len(t.strip()) > 30:
+        return t
+
+    t = extract_transcript_from_invidious_mirrors(video_id)
+    if t and len(t.strip()) > 30:
+        return t
+
+    return None
 
 def query_gemini_json(prompt: str) -> Optional[dict]:
     if not api_key:
         return None
     
-    models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash"]
+    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash", "gemini-flash-lite-latest"]
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}]
     }).encode("utf-8")
@@ -169,9 +466,20 @@ def query_gemini_json(prompt: str) -> Optional[dict]:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 res_data = json.loads(resp.read().decode("utf-8"))
                 text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                code_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+                if code_match:
+                    try:
+                        return json.loads(code_match.group(1).strip())
+                    except Exception:
+                        pass
+                brace_match = re.search(r'(\{[\s\S]*\})', text)
+                if brace_match:
+                    try:
+                        return json.loads(brace_match.group(1).strip())
+                    except Exception:
+                        pass
                 clean_json = re.sub(r'```json\s*|\s*```', '', text).strip()
-                parsed = json.loads(clean_json)
-                return parsed
+                return json.loads(clean_json)
         except Exception:
             continue
     return None
@@ -454,16 +762,32 @@ def summarize_video(req: SummarizeRequest):
     if not video_id:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL format. Please enter a valid YouTube video link.")
 
-    metadata = fetch_video_metadata(video_id)
-    transcript = get_transcript_text(video_id)
-    
-    # Calculate word count & read time
-    words = transcript.split()
-    total_words = len(words)
-    estimated_read_minutes = max(1, round(total_words / 150))
+    innertube_data = get_innertube_player_data(video_id)
+    metadata = fetch_video_metadata(video_id, innertube_data)
+    transcript = get_transcript_text(video_id, innertube_data)
 
-    # Truncate transcript if excessively long (e.g. > 15,000 words ~ 60,000 chars)
-    trimmed_transcript = " ".join(words[:6000])
+    has_direct_transcript = bool(transcript and len(transcript.strip()) > 50)
+
+    if has_direct_transcript:
+        words = transcript.split()
+        total_words = len(words)
+        estimated_read_minutes = max(1, round(total_words / 150))
+        trimmed_transcript = " ".join(words[:6000])
+        content_payload = f'VIDEO TRANSCRIPT:\n"""{trimmed_transcript}"""'
+    else:
+        # Graceful AI Video Knowledge & Metadata Synthesis
+        total_words = "AI Synthesized"
+        if metadata.get("lengthSeconds"):
+            estimated_read_minutes = max(1, round(metadata["lengthSeconds"] / 60 / 3))
+        else:
+            estimated_read_minutes = 5
+
+        desc_preview = metadata.get("description", "")
+        content_payload = (
+            f"NOTE: Direct subtitle tracks were unavailable or restricted on YouTube for this video.\n"
+            f"Synthesize comprehensive, authoritative notes using your deep knowledge of the YouTube video \"{metadata['title']}\" by {metadata['author']}.\n"
+            f"Video Overview & Description:\n\"\"\"{desc_preview}\"\"\""
+        )
 
     lang_info = LANGUAGES.get(req.language, LANGUAGES["en"])
     lang_name = lang_info["name"]
@@ -524,8 +848,7 @@ CONTENT EMPHASIS:
 LANGUAGE TARGET: {lang_name} ({lang_native})
 CRITICAL INSTRUCTION: Every single title, sentence, bullet, and explanation MUST be written naturally and eloquently in {lang_name} ({lang_native}).
 
-VIDEO TRANSCRIPT:
-\"\"\"{trimmed_transcript}\"\"\"
+{content_payload}
 
 Generate an impactful, highly customized summary that STRICTLY REFLECTS the requested {req.difficulty.upper()} complexity and {spec['format_badge']} document structure.
 Do NOT output a generic summary. The tone, titles, section headings, and depth MUST match the format.
@@ -609,7 +932,8 @@ Do NOT wrap in markdown formatting code blocks. Return ONLY pure JSON."""
         "metadata": metadata,
         "transcriptStats": {
             "totalWords": total_words,
-            "estimatedReadMinutes": estimated_read_minutes
+            "estimatedReadMinutes": estimated_read_minutes,
+            "hasDirectTranscript": has_direct_transcript
         },
         "difficulty": req.difficulty,
         "format_style": req.format_style,

@@ -477,11 +477,16 @@ ${(s.aux_right_items || s.quotes_or_highlights)?.map(it => `> "${it}"`).join('\n
               <h2 className="preview-title">{data.metadata?.title}</h2>
               <div className="preview-meta-row">
                 <span><strong>Channel:</strong> {data.metadata?.author}</span>
-                <span><Clock size={14} /> <strong>Words:</strong> {data.transcriptStats?.totalWords?.toLocaleString()}</span>
+                <span><Clock size={14} /> <strong>Words:</strong> {typeof data.transcriptStats?.totalWords === 'number' ? data.transcriptStats.totalWords.toLocaleString() : (data.transcriptStats?.totalWords || 'Synthesized')}</span>
                 <span><FileText size={14} /> <strong>Est. Read:</strong> ~{data.transcriptStats?.estimatedReadMinutes} mins</span>
                 <span className="pill-tag difficulty-pill"><Sliders size={13} /> {data.difficulty}</span>
                 {data.format_style && <span className="pill-tag format-pill"><FileText size={13} /> {data.format_style.replace('_', ' ')}</span>}
                 {data.focus_area && <span className="pill-tag focus-pill"><Bookmark size={13} /> {data.focus_area.replace('_', ' ')}</span>}
+                {data.transcriptStats && !data.transcriptStats.hasDirectTranscript && (
+                  <span className="pill-tag synth-pill" title="Synthesized using deep AI knowledge and video metadata because YouTube closed-caption streams were unavailable">
+                    <Sparkles size={13} /> AI Video Synthesis
+                  </span>
+                )}
               </div>
             </div>
           </div>

@@ -87,7 +87,7 @@ def extract_transcript_details(video_id):
         except Exception:
             pass
 
-    st.error("Could not retrieve transcript for this YouTube video. Captions or subtitles appear to be disabled or unavailable on this specific video.")
+    st.info("Direct closed-captions unavailable on YouTube. Synthesizing notes using AI video knowledge...")
     return None
 
 def generate_gemini_content(transcript_text, prompt):
@@ -167,11 +167,10 @@ if youtube_link:
         if st.button("Get Summary Notes"):
             transcript_text = extract_transcript_details(video_id)
 
-            if transcript_text:
-                with st.spinner("Processing summary... Please wait."):
-                    # Generate the summary with the selected difficulty level
-                    prompt = get_difficulty_prompt(difficulty)
-                    summary = generate_gemini_content(transcript_text, prompt)
+            with st.spinner("Processing summary... Please wait."):
+                prompt = get_difficulty_prompt(difficulty)
+                content_input = transcript_text if transcript_text else f"Video URL: https://www.youtube.com/watch?v={video_id}. (Note: Direct closed captions were restricted or disabled on YouTube for this stream; please synthesize the notes using your world knowledge of this video)."
+                summary = generate_gemini_content(content_input, prompt)
                 
                 if summary:
                     # Translate the summary to the selected language if not English
